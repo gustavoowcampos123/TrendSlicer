@@ -2,4 +2,4 @@ streamlit
 yt-dlp
 moviepy
 pillow
-openai-whisper
+requests
