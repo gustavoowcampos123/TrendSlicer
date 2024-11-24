@@ -1,4 +1,5 @@
 import os
+import shutil
 import streamlit as st
 from random import randint
 import subprocess
@@ -33,7 +34,7 @@ def download_vosk_model(model_path="/tmp/vosk-compact-model"):
         # Mover os arquivos extraídos para o diretório correto
         extracted_folder = "/tmp/vosk-model-small-en-us-0.15"
         if os.path.exists(extracted_folder):
-            os.rename(extracted_folder, model_path)
+            shutil.move(extracted_folder, model_path)
 
         if not os.path.exists(os.path.join(model_path, "model.conf")):
             raise FileNotFoundError("Falha na extração do modelo Vosk. Verifique o arquivo ZIP.")
