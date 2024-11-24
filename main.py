@@ -7,6 +7,31 @@ import json
 from vosk import Model, KaldiRecognizer
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from PIL import Image
+import requests
+import tarfile
+
+
+def download_vosk_model(model_path="/tmp/vosk-compact-model"):
+    """
+    Baixa o modelo Vosk Compacto automaticamente para o diretório especificado.
+    """
+    if not os.path.exists(model_path):
+        st.warning("Baixando o modelo Vosk Compacto. Isso pode levar alguns minutos.")
+        model_url = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
+        model_tar = "/tmp/vosk-compact-model.zip"
+
+        # Fazer o download do modelo
+        response = requests.get(model_url, stream=True)
+        with open(model_tar, "wb") as f:
+            for chunk in response.iter_content(chunk_size=1024):
+                f.write(chunk)
+
+        # Extrair o modelo compactado
+        with tarfile.open(model_tar, "r:gz") as tar:
+            tar.extractall(path=model_path)
+        st.success("Modelo Vosk Compacto baixado e extraído com sucesso!")
+
+    return model_path
 
 
 def download_video(youtube_url, output_path="downloads"):
@@ -101,14 +126,11 @@ def extract_thumbnail(video_path, start_time, output_path="thumbnails"):
     return thumbnail_path
 
 
-def transcribe_audio_with_vosk(audio_path, model_path="vosk-compact-model"):
+def transcribe_audio_with_vosk(audio_path, model_path="/tmp/vosk-compact-model"):
     """
     Transcreve o áudio de um arquivo usando o Vosk Compacto.
     """
     try:
-        if not os.path.exists(model_path):
-            raise FileNotFoundError("Modelo Vosk Compacto não encontrado. Baixe em https://alphacephei.com/vosk/models#compact")
-
         model = Model(model_path)
 
         with wave.open(audio_path, "rb") as wf:
@@ -144,6 +166,8 @@ def main():
     clip_length = st.selectbox("Escolha a duração dos cortes (em segundos)", [30, 40, 60, 80])
 
     if st.button("Gerar Cortes"):
+        model_path = download_vosk_model()  # Baixar o modelo Vosk Compacto
+
         if not youtube_url:
             st.error("Por favor, insira um link válido do YouTube.")
             return
@@ -174,7 +198,7 @@ def main():
                 stderr=subprocess.PIPE
             )
 
-            transcription = transcribe_audio_with_vosk(wav_file)
+            transcription = transcribe_audio_with_vosk(wav_file, model_path)
             description = f"Descrição baseada na transcrição: {transcription}"
 
             col1, col2 = st.columns([1, 4])
