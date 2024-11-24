@@ -155,8 +155,9 @@ def transcribe_audio_with_assemblyai(video_path):
                 progress_bar.progress(100)
                 return status_response["text"]
             elif status_response["status"] == "failed":
-                raise RuntimeError("Erro na transcrição do áudio.")
-            progress_bar.progress(int(status_response.get("progress", 0)))
+                st.error("Erro na transcrição. Verifique o áudio enviado.")
+                return "Transcrição indisponível."
+            progress_bar.progress(min(int(status_response.get("progress", 0)), 100))
             time.sleep(2)  # Aguarda 2 segundos antes de verificar novamente
     except Exception as e:
         st.error(f"Erro ao transcrever o áudio: {e}")
