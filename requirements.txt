@@ -3,3 +3,5 @@ yt-dlp
 moviepy
 pillow
 openai==0.28.0
+openai>=1.0.0
+
