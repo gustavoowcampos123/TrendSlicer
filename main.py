@@ -37,9 +37,7 @@ def get_video_duration(video_path):
     """
     Usa ffprobe para obter a duração total do vídeo.
     """
-    try:
-        ffprobe_path = "ffprobe"
-        result = subprocess.run(
+
             [ffprobe_path, "-v", "error", "-show_entries", "format=duration", "-of", "json", video_path],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
