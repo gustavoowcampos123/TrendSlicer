@@ -7,6 +7,7 @@ import yt_dlp
 import requests
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from PIL import Image
+import time
 
 # Configure a chave de API da AssemblyAI
 ASSEMBLYAI_API_KEY = "15d54646245246528fd9e07cac47341f"
@@ -103,29 +104,35 @@ def extract_thumbnail(video_path, start_time, output_path="thumbnails"):
 
 def transcribe_audio_with_assemblyai(video_path):
     """
-    Usa a API AssemblyAI para transcrever o áudio do clipe.
+    Usa a API AssemblyAI para transcrever o áudio do clipe e exibe o progresso.
     """
     try:
-        # Enviar o arquivo para AssemblyAI
+        # Configuração inicial
         headers = {"authorization": ASSEMBLYAI_API_KEY}
         upload_url = "https://api.assemblyai.com/v2/upload"
+        transcript_url = "https://api.assemblyai.com/v2/transcript"
+
+        # Etapa 1: Fazer o upload do arquivo
         with open(video_path, "rb") as f:
             response = requests.post(upload_url, headers=headers, files={"file": f})
         upload_response = response.json()
 
-        # Iniciar a transcrição
-        transcription_url = "https://api.assemblyai.com/v2/transcript"
+        # Etapa 2: Solicitar transcrição
         transcript_request = {"audio_url": upload_response["upload_url"]}
-        transcript_response = requests.post(transcription_url, headers=headers, json=transcript_request)
+        transcript_response = requests.post(transcript_url, headers=headers, json=transcript_request)
         transcript_id = transcript_response.json()["id"]
 
-        # Verificar o status da transcrição
+        # Etapa 3: Acompanhar o progresso da transcrição
+        progress_bar = st.progress(0)
         while True:
-            status_response = requests.get(f"{transcription_url}/{transcript_id}", headers=headers).json()
+            status_response = requests.get(f"{transcript_url}/{transcript_id}", headers=headers).json()
             if status_response["status"] == "completed":
+                progress_bar.progress(100)
                 return status_response["text"]
             elif status_response["status"] == "failed":
                 raise RuntimeError("Erro na transcrição do áudio.")
+            progress_bar.progress(int(status_response.get("progress", 0)))
+            time.sleep(2)  # Aguarda 2 segundos antes de verificar novamente
     except Exception as e:
         st.error(f"Erro ao transcrever o áudio: {e}")
         return "Transcrição indisponível."
