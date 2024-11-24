@@ -6,7 +6,10 @@ import json
 import yt_dlp
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from PIL import Image
-import whisper
+import openai
+
+# Configure a chave de API da OpenAI
+openai.api_key = os.getenv("OPENAI_API_KEY")  # Defina sua chave como uma variável de ambiente no Streamlit Cloud
 
 
 def download_video(youtube_url, output_path="downloads"):
@@ -98,13 +101,17 @@ def extract_thumbnail(video_path, start_time, output_path="thumbnails"):
     return thumbnail_path
 
 
-def transcribe_audio(video_path):
+def transcribe_audio_with_openai(video_path):
     """
-    Transcreve o áudio do clipe usando o modelo Whisper.
+    Usa a API da OpenAI para transcrever o áudio do clipe.
     """
-    model = whisper.load_model("base")
-    result = model.transcribe(video_path)
-    return result["text"]
+    try:
+        with open(video_path, "rb") as audio_file:
+            response = openai.Audio.transcribe("whisper-1", audio_file)
+        return response["text"]
+    except Exception as e:
+        st.error(f"Erro ao transcrever o áudio: {e}")
+        return "Transcrição indisponível."
 
 
 def main():
@@ -141,7 +148,7 @@ def main():
         st.write("Baixe os cortes abaixo com prévias:")
         for i, (clip, start_time) in enumerate(st.session_state["clips"], start=1):
             thumbnail = extract_thumbnail(clip, start_time)
-            transcription = transcribe_audio(clip)
+            transcription = transcribe_audio_with_openai(clip)
             description = f"Descrição baseada na transcrição: {transcription}"
             col1, col2 = st.columns([1, 4])
 
