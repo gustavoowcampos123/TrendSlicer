@@ -13,9 +13,9 @@ import zipfile
 
 def download_vosk_model(model_path="/tmp/vosk-compact-model"):
     """
-    Baixa o modelo Vosk Compacto automaticamente para o diretório especificado.
+    Baixa e extrai o modelo Vosk Compacto no diretório especificado.
     """
-    if not os.path.exists(model_path):
+    if not os.path.exists(model_path) or not os.path.exists(os.path.join(model_path, "model.conf")):
         st.warning("Baixando o modelo Vosk Compacto. Isso pode levar alguns minutos.")
         model_url = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
         model_zip = "/tmp/vosk-compact-model.zip"
@@ -28,7 +28,15 @@ def download_vosk_model(model_path="/tmp/vosk-compact-model"):
 
         # Extrair o modelo compactado
         with zipfile.ZipFile(model_zip, "r") as zip_ref:
-            zip_ref.extractall(model_path)
+            zip_ref.extractall("/tmp/")
+
+        # Mover os arquivos extraídos para o diretório correto
+        extracted_folder = "/tmp/vosk-model-small-en-us-0.15"
+        if os.path.exists(extracted_folder):
+            os.rename(extracted_folder, model_path)
+
+        if not os.path.exists(os.path.join(model_path, "model.conf")):
+            raise FileNotFoundError("Falha na extração do modelo Vosk. Verifique o arquivo ZIP.")
 
         st.success("Modelo Vosk Compacto baixado e extraído com sucesso!")
 
