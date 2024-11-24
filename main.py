@@ -28,7 +28,8 @@ def download_vosk_model(model_path="/tmp/vosk-compact-model"):
 
         # Extrair o modelo compactado
         with zipfile.ZipFile(model_zip, "r") as zip_ref:
-            zip_ref.extractall("/tmp/")
+            zip_ref.extractall(model_path)
+
         st.success("Modelo Vosk Compacto baixado e extraído com sucesso!")
 
     return model_path
@@ -203,7 +204,7 @@ def main():
 
             col1, col2 = st.columns([1, 4])
             with col1:
-                st.image(thumbnail, caption=f"Corte {i}", use_column_width=True)
+                st.image(thumbnail, caption=f"Corte {i}", use_container_width=True)
             with col2:
                 st.write(description)
                 with open(clip, "rb") as f:
