@@ -34,7 +34,7 @@ def get_video_duration(video_path):
     """
     try:
         # Especifique o caminho do ffprobe
-        ffprobe_path = "C:\\ffmpeg\\bin\\ffprobe.exe" if os.name == 'nt' else "ffprobe"
+        ffprobe_path = "C:\\ffmpeg\\bin\\ffprobe.exe" if os.name == 'nt' else "/usr/bin/ffprobe"
         result = subprocess.run(
             [ffprobe_path, "-v", "error", "-show_entries", "format=duration", "-of", "json", video_path],
             stdout=subprocess.PIPE,
