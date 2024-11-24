@@ -56,6 +56,7 @@ def get_video_duration(video_path):
 def generate_clips(video_path, clip_length, num_clips=10, output_path="cuts"):
     """
     Gera cortes de vídeo a partir de um vídeo original, utilizando ffmpeg para processar.
+    Inclui barra de progresso no Streamlit.
     """
     try:
         if not os.path.exists(output_path):
@@ -65,6 +66,7 @@ def generate_clips(video_path, clip_length, num_clips=10, output_path="cuts"):
         video_duration = get_video_duration(video_path)
 
         clips = []
+        progress_bar = st.progress(0)
         for i in range(num_clips):
             start_time = randint(0, int(video_duration - clip_length - 1))
             output_file = os.path.join(output_path, f"clip_{i + 1}.mp4")
@@ -79,12 +81,35 @@ def generate_clips(video_path, clip_length, num_clips=10, output_path="cuts"):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE
             )
+
+            # Validar se o arquivo gerado contém áudio
+            if not validate_audio(output_file):
+                st.warning(f"Corte {i + 1} não contém áudio. Ignorando...")
+                continue
+
             clips.append((output_file, start_time))
+            progress_bar.progress(int((i + 1) / num_clips * 100))
 
         return clips
     except Exception as e:
         st.error(f"Erro ao gerar os cortes: {e}")
         return None
+
+
+def validate_audio(file_path):
+    """
+    Verifica se o arquivo contém áudio usando ffprobe.
+    """
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-i", file_path, "-show_streams", "-select_streams", "a", "-loglevel", "error"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        return bool(result.stdout.strip())
+    except Exception:
+        return False
 
 
 def extract_thumbnail(video_path, start_time, output_path="thumbnails"):
