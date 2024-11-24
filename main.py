@@ -51,7 +51,7 @@ def get_video_duration(video_path):
         raise RuntimeError(f"Erro ao obter a duração do vídeo: {e}")
 
 
-def generate_clips(video_path, clip_length, num_clips=10, output_path="cuts"):
+def generate_clips(video_path, clip_length, num_clips=5, output_path="cuts"):
     """
     Gera cortes de vídeo a partir de um vídeo original, utilizando ffmpeg para processar.
     """
@@ -101,13 +101,13 @@ def extract_thumbnail(video_path, start_time, output_path="thumbnails"):
     return thumbnail_path
 
 
-def transcribe_audio_with_vosk(audio_path, model_path="model"):
+def transcribe_audio_with_vosk(audio_path, model_path="vosk-compact-model"):
     """
-    Transcreve o áudio de um arquivo usando o Vosk.
+    Transcreve o áudio de um arquivo usando o Vosk Compacto.
     """
     try:
         if not os.path.exists(model_path):
-            raise FileNotFoundError("Modelo Vosk não encontrado. Baixe o modelo em https://alphacephei.com/vosk/models")
+            raise FileNotFoundError("Modelo Vosk Compacto não encontrado. Baixe em https://alphacephei.com/vosk/models#compact")
 
         model = Model(model_path)
 
