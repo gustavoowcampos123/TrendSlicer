@@ -8,7 +8,7 @@ from vosk import Model, KaldiRecognizer
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from PIL import Image
 import requests
-import tarfile
+import zipfile
 
 
 def download_vosk_model(model_path="/tmp/vosk-compact-model"):
@@ -18,17 +18,17 @@ def download_vosk_model(model_path="/tmp/vosk-compact-model"):
     if not os.path.exists(model_path):
         st.warning("Baixando o modelo Vosk Compacto. Isso pode levar alguns minutos.")
         model_url = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
-        model_tar = "/tmp/vosk-compact-model.zip"
+        model_zip = "/tmp/vosk-compact-model.zip"
 
         # Fazer o download do modelo
         response = requests.get(model_url, stream=True)
-        with open(model_tar, "wb") as f:
+        with open(model_zip, "wb") as f:
             for chunk in response.iter_content(chunk_size=1024):
                 f.write(chunk)
 
         # Extrair o modelo compactado
-        with tarfile.open(model_tar, "r:gz") as tar:
-            tar.extractall(path=model_path)
+        with zipfile.ZipFile(model_zip, "r") as zip_ref:
+            zip_ref.extractall("/tmp/")
         st.success("Modelo Vosk Compacto baixado e extraído com sucesso!")
 
     return model_path
