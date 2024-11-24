@@ -1,9 +1,8 @@
 import os
 import streamlit as st
 from random import randint
-from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
-from moviepy.video.io.VideoFileClip import VideoFileClip
 import yt_dlp
+import ffmpeg
 
 
 def download_video(youtube_url, output_path="downloads"):
@@ -30,17 +29,21 @@ def generate_clips(video_path, clip_length, num_clips=10, output_path="cuts"):
         if not os.path.exists(output_path):
             os.makedirs(output_path)
 
-        video = VideoFileClip(video_path)
-        video_duration = int(video.duration)
+        # Obter duração total do vídeo usando ffmpeg
+        probe = ffmpeg.probe(video_path)
+        video_duration = float(probe["format"]["duration"])
 
         clips = []
         for i in range(num_clips):
-            start_time = randint(0, video_duration - clip_length - 1)
+            start_time = randint(0, int(video_duration - clip_length - 1))
             end_time = start_time + clip_length
             output_file = os.path.join(output_path, f"clip_{i + 1}.mp4")
-            
-            # Substituí targetname por output_file
-            ffmpeg_extract_subclip(video_path, start_time, end_time, output_file)
+
+            # Gerar o clipe com ffmpeg
+            ffmpeg.input(video_path, ss=start_time, t=clip_length).output(
+                output_file, codec="libx264", strict="-2"
+            ).run(quiet=True, overwrite_output=True)
+
             clips.append(output_file)
 
         return clips
