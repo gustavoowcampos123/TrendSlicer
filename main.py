@@ -39,8 +39,8 @@ def generate_clips(video_path, clip_length, num_clips=10, output_path="cuts"):
             end_time = start_time + clip_length
             output_file = os.path.join(output_path, f"clip_{i + 1}.mp4")
             
-            # Use o ffmpeg_extract_subclip para cortar o vídeo
-            ffmpeg_extract_subclip(video_path, start_time, end_time, targetname=output_file)
+            # Substituí targetname por output_file
+            ffmpeg_extract_subclip(video_path, start_time, end_time, output_file)
             clips.append(output_file)
 
         return clips
