@@ -1,7 +1,8 @@
 import os
 import streamlit as st
-from moviepy.video.io.VideoFileClip import VideoFileClip
 from random import randint
+from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
+from moviepy.video.io.VideoFileClip import VideoFileClip
 import yt_dlp
 
 
@@ -36,12 +37,12 @@ def generate_clips(video_path, clip_length, num_clips=10, output_path="cuts"):
         for i in range(num_clips):
             start_time = randint(0, video_duration - clip_length - 1)
             end_time = start_time + clip_length
-            clip = video.subclip(start_time, end_time)
             output_file = os.path.join(output_path, f"clip_{i + 1}.mp4")
-            clip.write_videofile(output_file, codec="libx264")
+            
+            # Use o ffmpeg_extract_subclip para cortar o vídeo
+            ffmpeg_extract_subclip(video_path, start_time, end_time, targetname=output_file)
             clips.append(output_file)
 
-        video.close()
         return clips
     except Exception as e:
         st.error(f"Erro ao gerar os cortes: {e}")
