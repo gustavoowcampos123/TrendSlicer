@@ -4,6 +4,8 @@ from random import randint
 import subprocess
 import json
 import yt_dlp
+from moviepy.video.io.VideoFileClip import VideoFileClip
+from PIL import Image
 
 
 def download_video(youtube_url, output_path="downloads"):
@@ -33,7 +35,6 @@ def get_video_duration(video_path):
     Usa ffprobe para obter a duração total do vídeo.
     """
     try:
-        # O Streamlit Cloud instala o ffprobe no PATH automaticamente via packages.txt
         ffprobe_path = "ffprobe"
         result = subprocess.run(
             [ffprobe_path, "-v", "error", "-show_entries", "format=duration", "-of", "json", video_path],
@@ -73,12 +74,27 @@ def generate_clips(video_path, clip_length, num_clips=10, output_path="cuts"):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE
             )
-            clips.append(output_file)
+            clips.append((output_file, start_time))
 
         return clips
     except Exception as e:
         st.error(f"Erro ao gerar os cortes: {e}")
         return None
+
+
+def extract_thumbnail(video_path, start_time, output_path="thumbnails"):
+    """
+    Extrai uma imagem de pré-visualização do clipe no início do vídeo.
+    """
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+
+    thumbnail_path = os.path.join(output_path, f"thumbnail_{os.path.basename(video_path)}.jpg")
+    with VideoFileClip(video_path) as video:
+        frame = video.get_frame(start_time)
+        image = Image.fromarray(frame)
+        image.save(thumbnail_path)
+    return thumbnail_path
 
 
 def main():
@@ -112,16 +128,24 @@ def main():
 
     # Exibir os clipes se existirem na sessão
     if "clips" in st.session_state and st.session_state["clips"]:
-        st.write("Baixe os cortes abaixo:")
-        for clip in st.session_state["clips"]:
-            clip_name = os.path.basename(clip)
-            with open(clip, "rb") as f:
-                st.download_button(
-                    label=f"Baixar {clip_name}",
-                    data=f,
-                    file_name=clip_name,
-                    mime="video/mp4"
-                )
+        st.write("Baixe os cortes abaixo com prévias:")
+        for i, (clip, start_time) in enumerate(st.session_state["clips"], start=1):
+            thumbnail = extract_thumbnail(clip, start_time)
+            description = f"Este clipe começa no segundo {start_time} e contém uma possível cena interessante."
+            col1, col2 = st.columns([1, 4])
+
+            with col1:
+                st.image(thumbnail, caption=f"Corte {i}", use_column_width=True)
+
+            with col2:
+                st.write(description)
+                with open(clip, "rb") as f:
+                    st.download_button(
+                        label=f"Baixar Corte {i}",
+                        data=f,
+                        file_name=os.path.basename(clip),
+                        mime="video/mp4"
+                    )
 
 
 if __name__ == "__main__":
