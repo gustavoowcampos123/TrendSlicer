@@ -2,15 +2,11 @@ import os
 import streamlit as st
 from random import randint
 import subprocess
+import wave
 import json
-import yt_dlp
-import requests
+from vosk import Model, KaldiRecognizer
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from PIL import Image
-import time
-
-# Configure a chave de API da AssemblyAI
-ASSEMBLYAI_API_KEY = "15d54646245246528fd9e07cac47341f"
 
 
 def download_video(youtube_url, output_path="downloads"):
@@ -18,6 +14,8 @@ def download_video(youtube_url, output_path="downloads"):
     Faz o download de um vídeo do YouTube usando yt-dlp e retorna o caminho do arquivo baixado.
     """
     try:
+        import yt_dlp
+
         if not os.path.exists(output_path):
             os.makedirs(output_path)
 
@@ -56,22 +54,19 @@ def get_video_duration(video_path):
 def generate_clips(video_path, clip_length, num_clips=10, output_path="cuts"):
     """
     Gera cortes de vídeo a partir de um vídeo original, utilizando ffmpeg para processar.
-    Inclui barra de progresso no Streamlit.
     """
     try:
         if not os.path.exists(output_path):
             os.makedirs(output_path)
 
-        # Obter duração total do vídeo
         video_duration = get_video_duration(video_path)
-
         clips = []
         progress_bar = st.progress(0)
+
         for i in range(num_clips):
             start_time = randint(0, int(video_duration - clip_length - 1))
             output_file = os.path.join(output_path, f"clip_{i + 1}.mp4")
 
-            # Gerar o clipe com ffmpeg
             subprocess.run(
                 [
                     "ffmpeg", "-y", "-i", video_path,
@@ -82,11 +77,6 @@ def generate_clips(video_path, clip_length, num_clips=10, output_path="cuts"):
                 stderr=subprocess.PIPE
             )
 
-            # Validar se o arquivo gerado contém áudio
-            if not validate_audio(output_file):
-                st.warning(f"Corte {i + 1} não contém áudio. Ignorando...")
-                continue
-
             clips.append((output_file, start_time))
             progress_bar.progress(int((i + 1) / num_clips * 100))
 
@@ -94,22 +84,6 @@ def generate_clips(video_path, clip_length, num_clips=10, output_path="cuts"):
     except Exception as e:
         st.error(f"Erro ao gerar os cortes: {e}")
         return None
-
-
-def validate_audio(file_path):
-    """
-    Verifica se o arquivo contém áudio usando ffprobe.
-    """
-    try:
-        result = subprocess.run(
-            ["ffprobe", "-i", file_path, "-show_streams", "-select_streams", "a", "-loglevel", "error"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-        return bool(result.stdout.strip())
-    except Exception:
-        return False
 
 
 def extract_thumbnail(video_path, start_time, output_path="thumbnails"):
@@ -127,40 +101,38 @@ def extract_thumbnail(video_path, start_time, output_path="thumbnails"):
     return thumbnail_path
 
 
-def transcribe_audio_with_assemblyai(video_path):
+def transcribe_audio_with_vosk(audio_path, model_path="model"):
     """
-    Usa a API AssemblyAI para transcrever o áudio do clipe e exibe o progresso.
+    Transcreve o áudio de um arquivo usando o Vosk.
     """
     try:
-        # Configuração inicial
-        headers = {"authorization": ASSEMBLYAI_API_KEY}
-        upload_url = "https://api.assemblyai.com/v2/upload"
-        transcript_url = "https://api.assemblyai.com/v2/transcript"
+        if not os.path.exists(model_path):
+            raise FileNotFoundError("Modelo Vosk não encontrado. Baixe o modelo em https://alphacephei.com/vosk/models")
 
-        # Etapa 1: Fazer o upload do arquivo
-        with open(video_path, "rb") as f:
-            response = requests.post(upload_url, headers=headers, files={"file": f})
-        upload_response = response.json()
+        model = Model(model_path)
 
-        # Etapa 2: Solicitar transcrição
-        transcript_request = {"audio_url": upload_response["upload_url"]}
-        transcript_response = requests.post(transcript_url, headers=headers, json=transcript_request)
-        transcript_id = transcript_response.json()["id"]
+        with wave.open(audio_path, "rb") as wf:
+            if wf.getnchannels() != 1 or wf.getsampwidth() != 2 or wf.getframerate() not in [8000, 16000]:
+                raise ValueError("O áudio deve estar em formato WAV com 1 canal, 16-bit e 16kHz ou 8kHz")
 
-        # Etapa 3: Acompanhar o progresso da transcrição
-        progress_bar = st.progress(0)
-        while True:
-            status_response = requests.get(f"{transcript_url}/{transcript_id}", headers=headers).json()
-            if status_response["status"] == "completed":
-                progress_bar.progress(100)
-                return status_response["text"]
-            elif status_response["status"] == "failed":
-                st.error("Erro na transcrição. Verifique o áudio enviado.")
-                return "Transcrição indisponível."
-            progress_bar.progress(min(int(status_response.get("progress", 0)), 100))
-            time.sleep(2)  # Aguarda 2 segundos antes de verificar novamente
+            recognizer = KaldiRecognizer(model, wf.getframerate())
+            transcription = []
+
+            while True:
+                data = wf.readframes(4000)
+                if len(data) == 0:
+                    break
+                if recognizer.AcceptWaveform(data):
+                    result = json.loads(recognizer.Result())
+                    transcription.append(result.get("text", ""))
+
+            final_result = json.loads(recognizer.FinalResult())
+            transcription.append(final_result.get("text", ""))
+
+            return " ".join(transcription)
+
     except Exception as e:
-        st.error(f"Erro ao transcrever o áudio: {e}")
+        st.error(f"Erro ao transcrever áudio com Vosk: {e}")
         return "Transcrição indisponível."
 
 
@@ -168,13 +140,9 @@ def main():
     st.title("Gerador de Cortes Virais para YouTube")
     st.write("Insira um link de vídeo do YouTube e gere cortes curtos automaticamente!")
 
-    # Entrada do link do vídeo
     youtube_url = st.text_input("Link do vídeo do YouTube", "")
-
-    # Seleção da duração dos cortes
     clip_length = st.selectbox("Escolha a duração dos cortes (em segundos)", [30, 40, 60, 80])
 
-    # Botão para processar
     if st.button("Gerar Cortes"):
         if not youtube_url:
             st.error("Por favor, insira um link válido do YouTube.")
@@ -193,18 +161,25 @@ def main():
                 else:
                     st.error("Erro ao gerar os cortes.")
 
-    # Exibir os clipes se existirem na sessão
     if "clips" in st.session_state and st.session_state["clips"]:
         st.write("Baixe os cortes abaixo com prévias:")
         for i, (clip, start_time) in enumerate(st.session_state["clips"], start=1):
             thumbnail = extract_thumbnail(clip, start_time)
-            transcription = transcribe_audio_with_assemblyai(clip)
-            description = f"Descrição baseada na transcrição: {transcription}"
-            col1, col2 = st.columns([1, 4])
 
+            # Converter para WAV para usar no Vosk
+            wav_file = f"{os.path.splitext(clip)[0]}.wav"
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", clip, "-ac", "1", "-ar", "16000", wav_file],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+
+            transcription = transcribe_audio_with_vosk(wav_file)
+            description = f"Descrição baseada na transcrição: {transcription}"
+
+            col1, col2 = st.columns([1, 4])
             with col1:
                 st.image(thumbnail, caption=f"Corte {i}", use_column_width=True)
-
             with col2:
                 st.write(description)
                 with open(clip, "rb") as f:
