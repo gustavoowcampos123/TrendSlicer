@@ -1,4 +1,2 @@
 streamlit
 yt-dlp
-ffmpeg-python
-ffmpeg
