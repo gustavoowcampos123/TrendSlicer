@@ -6,6 +6,7 @@ import json
 import yt_dlp
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from PIL import Image
+import whisper
 
 
 def download_video(youtube_url, output_path="downloads"):
@@ -97,6 +98,15 @@ def extract_thumbnail(video_path, start_time, output_path="thumbnails"):
     return thumbnail_path
 
 
+def transcribe_audio(video_path):
+    """
+    Transcreve o áudio do clipe usando o modelo Whisper.
+    """
+    model = whisper.load_model("base")
+    result = model.transcribe(video_path)
+    return result["text"]
+
+
 def main():
     st.title("Gerador de Cortes Virais para YouTube")
     st.write("Insira um link de vídeo do YouTube e gere cortes curtos automaticamente!")
@@ -131,7 +141,8 @@ def main():
         st.write("Baixe os cortes abaixo com prévias:")
         for i, (clip, start_time) in enumerate(st.session_state["clips"], start=1):
             thumbnail = extract_thumbnail(clip, start_time)
-            description = f"Este clipe começa no segundo {start_time} e contém uma possível cena interessante."
+            transcription = transcribe_audio(clip)
+            description = f"Descrição baseada na transcrição: {transcription}"
             col1, col2 = st.columns([1, 4])
 
             with col1:
