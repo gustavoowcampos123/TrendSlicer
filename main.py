@@ -1,24 +1,34 @@
 import os
 import streamlit as st
-from pytube import YouTube
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from random import randint
+import yt_dlp
+
 
 def download_video(youtube_url, output_path="downloads"):
     try:
-        yt = YouTube(youtube_url)
-        stream = yt.streams.filter(progressive=True, file_extension="mp4").order_by("resolution").desc().first()
-        stream.download(output_path)
-        return os.path.join(output_path, stream.default_filename)
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+
+        ydl_opts = {
+            'format': 'best[ext=mp4]',  # Seleciona o melhor formato em mp4
+            'outtmpl': os.path.join(output_path, '%(title)s.%(ext)s'),  # Nome do arquivo
+        }
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(youtube_url, download=True)
+            video_path = ydl.prepare_filename(info)
+            return video_path
     except Exception as e:
         st.error(f"Erro ao baixar o vídeo: {e}")
         return None
+
 
 def generate_clips(video_path, clip_length, num_clips=10, output_path="cuts"):
     try:
         if not os.path.exists(output_path):
             os.makedirs(output_path)
-        
+
         video = VideoFileClip(video_path)
         video_duration = int(video.duration)
 
@@ -30,12 +40,13 @@ def generate_clips(video_path, clip_length, num_clips=10, output_path="cuts"):
             output_file = os.path.join(output_path, f"clip_{i + 1}.mp4")
             clip.write_videofile(output_file, codec="libx264")
             clips.append(output_file)
-        
+
         video.close()
         return clips
     except Exception as e:
         st.error(f"Erro ao gerar os cortes: {e}")
         return None
+
 
 def main():
     st.title("Gerador de Cortes Virais para YouTube")
@@ -52,15 +63,15 @@ def main():
         if not youtube_url:
             st.error("Por favor, insira um link válido do YouTube.")
             return
-        
+
         with st.spinner("Baixando o vídeo..."):
             video_path = download_video(youtube_url)
-        
+
         if video_path:
             st.success("Vídeo baixado com sucesso!")
             with st.spinner("Gerando cortes..."):
                 clips = generate_clips(video_path, clip_length)
-            
+
             if clips:
                 st.success("Cortes gerados com sucesso!")
                 st.write("Baixe os cortes abaixo:")
@@ -73,6 +84,7 @@ def main():
                             file_name=clip_name,
                             mime="video/mp4"
                         )
+
 
 if __name__ == "__main__":
     main()
