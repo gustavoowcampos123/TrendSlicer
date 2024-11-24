@@ -103,12 +103,15 @@ def extract_thumbnail(video_path, start_time, output_path="thumbnails"):
 
 def transcribe_audio_with_openai(video_path):
     """
-    Usa a API da OpenAI para transcrever o áudio do clipe.
+    Usa a nova API da OpenAI para transcrever o áudio do clipe.
     """
     try:
         with open(video_path, "rb") as audio_file:
-            response = openai.Audio.transcribe("whisper-1", audio_file)
-        return response["text"]
+            response = openai.Audio.translate(
+                model="whisper-1",
+                file=audio_file
+            )
+        return response.get("text", "Transcrição indisponível.")
     except Exception as e:
         st.error(f"Erro ao transcrever o áudio: {e}")
         return "Transcrição indisponível."
