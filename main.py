@@ -7,6 +7,7 @@ import yt_dlp
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from PIL import Image
 import openai
+import whisper
 
 # Configure a chave de API da OpenAI
 openai.api_key = os.getenv("OPENAI_API_KEY")  # Defina sua chave como uma variável de ambiente no Streamlit Cloud
@@ -101,21 +102,15 @@ def extract_thumbnail(video_path, start_time, output_path="thumbnails"):
     return thumbnail_path
 
 
-def transcribe_audio_with_openai(video_path):
-    """
-    Usa a nova API da OpenAI para transcrever o áudio do clipe.
-    """
-    try:
-        with open(video_path, "rb") as audio_file:
-            response = openai.Audio.translate(
-                model="whisper-1",
-                file=audio_file
-            )
-        return response.get("text", "Transcrição indisponível.")
-    except Exception as e:
-        st.error(f"Erro ao transcrever o áudio: {e}")
-        return "Transcrição indisponível."
 
+
+def transcribe_audio_with_whisper(video_path):
+    """
+    Usa o modelo Whisper local para transcrever o áudio.
+    """
+    model = whisper.load_model("base")
+    result = model.transcribe(video_path)
+    return result["text"]
 
 def main():
     st.title("Gerador de Cortes Virais para YouTube")
