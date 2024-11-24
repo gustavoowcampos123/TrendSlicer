@@ -30,11 +30,13 @@ def download_video(youtube_url, output_path="downloads"):
 
 def get_video_duration(video_path):
     """
-    Usa ffprobe para obter a duração total do vídeo.
+    Usa ffprobe para obter a duração total do vídeo. Especifica o caminho do ffprobe diretamente.
     """
     try:
+        # Altere este caminho para o local onde o ffprobe está instalado no seu sistema
+        ffprobe_path = "C:\\ffmpeg\\bin\\ffprobe.exe" if os.name == 'nt' else "ffprobe"
         result = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "json", video_path],
+            [ffprobe_path, "-v", "error", "-show_entries", "format=duration", "-of", "json", video_path],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
