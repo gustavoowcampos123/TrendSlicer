@@ -72,19 +72,24 @@ def main():
             st.success("Vídeo baixado com sucesso!")
             with st.spinner("Gerando cortes..."):
                 clips = generate_clips(video_path, clip_length)
+                if clips:
+                    st.session_state["clips"] = clips
+                    st.success("Cortes gerados com sucesso!")
+                else:
+                    st.error("Erro ao gerar os cortes.")
 
-            if clips:
-                st.success("Cortes gerados com sucesso!")
-                st.write("Baixe os cortes abaixo:")
-                for clip in clips:
-                    clip_name = os.path.basename(clip)
-                    with open(clip, "rb") as f:
-                        st.download_button(
-                            label=f"Baixar {clip_name}",
-                            data=f,
-                            file_name=clip_name,
-                            mime="video/mp4"
-                        )
+    # Exibir os clipes se existirem na sessão
+    if "clips" in st.session_state and st.session_state["clips"]:
+        st.write("Baixe os cortes abaixo:")
+        for clip in st.session_state["clips"]:
+            clip_name = os.path.basename(clip)
+            with open(clip, "rb") as f:
+                st.download_button(
+                    label=f"Baixar {clip_name}",
+                    data=f,
+                    file_name=clip_name,
+                    mime="video/mp4"
+                )
 
 
 if __name__ == "__main__":
