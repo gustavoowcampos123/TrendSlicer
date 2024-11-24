@@ -14,22 +14,36 @@ import zipfile
 
 def download_vosk_model(model_path="/tmp/vosk-compact-model"):
     """
-    Baixa e extrai o modelo Vosk Compacto no diretório especificado.
+    Baixa e extrai o modelo Vosk Compacto de um link externo (Google Drive).
     """
+    # Link direto do Google Drive
+    external_url = "https://drive.google.com/uc?id=19b_gnkqA7eJYqp51I9piKz1KfmdUUTNS&export=download"
+
+    model_zip = "/tmp/vosk-compact-model.zip"
+
     if not os.path.exists(model_path) or not os.path.exists(os.path.join(model_path, "model.conf")):
         st.warning("Baixando o modelo Vosk Compacto. Isso pode levar alguns minutos.")
-        model_url = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
-        model_zip = "/tmp/vosk-compact-model.zip"
 
         # Fazer o download do modelo
-        response = requests.get(model_url, stream=True)
-        with open(model_zip, "wb") as f:
-            for chunk in response.iter_content(chunk_size=1024):
-                f.write(chunk)
+        try:
+            response = requests.get(external_url, stream=True)
+            response.raise_for_status()  # Levanta exceção para erros HTTP
+            with open(model_zip, "wb") as f:
+                for chunk in response.iter_content(chunk_size=1024):
+                    f.write(chunk)
+        except Exception as e:
+            raise FileNotFoundError(f"Erro ao baixar o modelo Vosk: {e}")
+
+        # Verificar se o arquivo foi baixado corretamente
+        if not os.path.exists(model_zip) or os.path.getsize(model_zip) < 1:
+            raise FileNotFoundError("Falha no download do modelo Vosk. O arquivo está vazio ou ausente.")
 
         # Extrair o modelo compactado
-        with zipfile.ZipFile(model_zip, "r") as zip_ref:
-            zip_ref.extractall("/tmp/")
+        try:
+            with zipfile.ZipFile(model_zip, "r") as zip_ref:
+                zip_ref.extractall("/tmp/")
+        except zipfile.BadZipFile:
+            raise FileNotFoundError("O arquivo ZIP do modelo Vosk está corrompido.")
 
         # Verificar e mover os arquivos extraídos
         extracted_folder = "/tmp/vosk-model-small-en-us-0.15"
@@ -40,7 +54,7 @@ def download_vosk_model(model_path="/tmp/vosk-compact-model"):
                 st.info("O modelo já foi extraído previamente.")
 
         if not os.path.exists(os.path.join(model_path, "model.conf")):
-            raise FileNotFoundError("Falha na extração do modelo Vosk. Verifique o arquivo ZIP.")
+            raise FileNotFoundError("Falha na extração do modelo Vosk. Arquivo 'model.conf' não encontrado.")
 
         st.success("Modelo Vosk Compacto baixado e extraído com sucesso!")
 
