@@ -31,10 +31,13 @@ def download_vosk_model(model_path="/tmp/vosk-compact-model"):
         with zipfile.ZipFile(model_zip, "r") as zip_ref:
             zip_ref.extractall("/tmp/")
 
-        # Mover os arquivos extraídos para o diretório correto
+        # Verificar e mover os arquivos extraídos
         extracted_folder = "/tmp/vosk-model-small-en-us-0.15"
         if os.path.exists(extracted_folder):
-            shutil.move(extracted_folder, model_path)
+            if not os.path.exists(model_path):
+                shutil.move(extracted_folder, model_path)
+            else:
+                st.info("O modelo já foi extraído previamente.")
 
         if not os.path.exists(os.path.join(model_path, "model.conf")):
             raise FileNotFoundError("Falha na extração do modelo Vosk. Verifique o arquivo ZIP.")
