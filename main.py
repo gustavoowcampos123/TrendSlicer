@@ -1,11 +1,15 @@
 import os
 import streamlit as st
 from random import randint
+import subprocess
+import json
 import yt_dlp
-import ffmpeg
 
 
 def download_video(youtube_url, output_path="downloads"):
+    """
+    Faz o download de um vídeo do YouTube usando yt-dlp e retorna o caminho do arquivo baixado.
+    """
     try:
         if not os.path.exists(output_path):
             os.makedirs(output_path)
@@ -24,26 +28,49 @@ def download_video(youtube_url, output_path="downloads"):
         return None
 
 
+def get_video_duration(video_path):
+    """
+    Usa ffprobe para obter a duração total do vídeo.
+    """
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "json", video_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        info = json.loads(result.stdout)
+        return float(info["format"]["duration"])
+    except Exception as e:
+        raise RuntimeError(f"Erro ao obter a duração do vídeo: {e}")
+
+
 def generate_clips(video_path, clip_length, num_clips=10, output_path="cuts"):
+    """
+    Gera cortes de vídeo a partir de um vídeo original, utilizando ffmpeg para processar.
+    """
     try:
         if not os.path.exists(output_path):
             os.makedirs(output_path)
 
-        # Obter duração total do vídeo usando ffmpeg
-        probe = ffmpeg.probe(video_path)
-        video_duration = float(probe["format"]["duration"])
+        # Obter duração total do vídeo
+        video_duration = get_video_duration(video_path)
 
         clips = []
         for i in range(num_clips):
             start_time = randint(0, int(video_duration - clip_length - 1))
-            end_time = start_time + clip_length
             output_file = os.path.join(output_path, f"clip_{i + 1}.mp4")
 
             # Gerar o clipe com ffmpeg
-            ffmpeg.input(video_path, ss=start_time, t=clip_length).output(
-                output_file, codec="libx264", strict="-2"
-            ).run(quiet=True, overwrite_output=True)
-
+            subprocess.run(
+                [
+                    "ffmpeg", "-y", "-i", video_path,
+                    "-ss", str(start_time), "-t", str(clip_length),
+                    "-c:v", "libx264", "-c:a", "aac", output_file
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
             clips.append(output_file)
 
         return clips
@@ -60,7 +87,7 @@ def main():
     youtube_url = st.text_input("Link do vídeo do YouTube", "")
 
     # Seleção da duração dos cortes
-    clip_length = st.selectbox("Escolha a duração dos cortes", [30, 40, 60, 80])
+    clip_length = st.selectbox("Escolha a duração dos cortes (em segundos)", [30, 40, 60, 80])
 
     # Botão para processar
     if st.button("Gerar Cortes"):
