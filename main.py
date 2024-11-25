@@ -4,7 +4,7 @@ import streamlit as st
 from random import randint
 import subprocess
 import wave
-import json  # Import corrigido
+import json
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from PIL import Image
 import speech_recognition as sr
@@ -52,7 +52,7 @@ def get_video_duration(video_path):
         raise RuntimeError(f"Erro ao obter a duração do vídeo: {e}")
 
 
-def generate_clips(video_path, clip_length, num_clips=5, output_path="cuts"):
+def generate_clips(video_path, clip_length, num_clips=10, output_path="cuts"):
     """
     Gera cortes de vídeo a partir de um vídeo original, utilizando ffmpeg para processar.
     """
@@ -111,6 +111,11 @@ def transcribe_audio_with_sphinx(audio_path):
         with sr.AudioFile(audio_path) as source:
             audio_data = recognizer.record(source)
         return recognizer.recognize_sphinx(audio_data)
+    except sr.UnknownValueError:
+        return "A transcrição não pôde ser realizada. Áudio inaudível ou não claro."
+    except sr.RequestError as e:
+        st.error(f"Erro no SpeechRecognition: {e}")
+        return "Erro ao usar SpeechRecognition. Verifique o ambiente."
     except Exception as e:
         st.error(f"Erro ao transcrever áudio com SpeechRecognition: {e}")
         return "Transcrição indisponível."
