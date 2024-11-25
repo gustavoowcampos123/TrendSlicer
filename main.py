@@ -4,70 +4,9 @@ import streamlit as st
 from random import randint
 import subprocess
 import wave
-import json
-from vosk import Model, KaldiRecognizer
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from PIL import Image
-import requests
-import zipfile
-
-
-def download_vosk_model(model_path="/tmp/vosk-compact-model"):
-    """
-    Baixa e extrai o modelo Vosk Compacto de um link do Google Drive.
-    """
-    # Link direto do Google Drive
-    drive_url = "https://drive.google.com/uc?id=19b_gnkqA7eJYqp51I9piKz1KfmdUUTNS&export=download"
-
-    model_zip = "/tmp/vosk-compact-model.zip"
-
-    if not os.path.exists(model_path) or not os.path.exists(os.path.join(model_path, "model.conf")):
-        st.warning("Baixando o modelo Vosk Compacto. Isso pode levar alguns minutos.")
-
-        # Fazer o download do modelo com redirecionamento
-        try:
-            session = requests.Session()
-            response = session.get(drive_url, stream=True)
-            for key, value in response.cookies.items():
-                if key.startswith("download_warning"):
-                    drive_url = f"https://drive.google.com/uc?export=download&id=19b_gnkqA7eJYqp51I9piKz1KfmdUUTNS&confirm={value}"
-                    response = session.get(drive_url, stream=True)
-                    break
-
-            # Baixar o arquivo final
-            with open(model_zip, "wb") as f:
-                for chunk in response.iter_content(chunk_size=1024):
-                    if chunk:  # Evita escrita de partes vazias
-                        f.write(chunk)
-        except Exception as e:
-            raise FileNotFoundError(f"Erro ao baixar o modelo Vosk: {e}")
-
-        # Verificar se o arquivo foi baixado corretamente
-        if not os.path.exists(model_zip) or os.path.getsize(model_zip) < 1:
-            raise FileNotFoundError("Falha no download do modelo Vosk. O arquivo está vazio ou ausente.")
-
-        # Extrair o modelo compactado
-        try:
-            with zipfile.ZipFile(model_zip, "r") as zip_ref:
-                zip_ref.extractall("/tmp/")
-        except zipfile.BadZipFile:
-            raise FileNotFoundError("O arquivo ZIP do modelo Vosk está corrompido.")
-
-        # Verificar e mover os arquivos extraídos
-        extracted_folder = "/tmp/vosk-model-small-en-us-0.15"
-        if os.path.exists(extracted_folder):
-            if not os.path.exists(model_path):
-                shutil.move(extracted_folder, model_path)
-            else:
-                st.info("O modelo já foi extraído previamente.")
-
-        if not os.path.exists(os.path.join(model_path, "model.conf")):
-            raise FileNotFoundError("Falha na extração do modelo Vosk. Arquivo 'model.conf' não encontrado.")
-
-        st.success("Modelo Vosk Compacto baixado e extraído com sucesso!")
-
-    return model_path
-
+import speech_recognition as sr
 
 
 def download_video(youtube_url, output_path="downloads"):
@@ -162,35 +101,17 @@ def extract_thumbnail(video_path, start_time, output_path="thumbnails"):
     return thumbnail_path
 
 
-def transcribe_audio_with_vosk(audio_path, model_path="/tmp/vosk-compact-model"):
+def transcribe_audio_with_sphinx(audio_path):
     """
-    Transcreve o áudio de um arquivo usando o Vosk Compacto.
+    Transcreve o áudio de um arquivo usando SpeechRecognition com CMU Sphinx.
     """
     try:
-        model = Model(model_path)
-
-        with wave.open(audio_path, "rb") as wf:
-            if wf.getnchannels() != 1 or wf.getsampwidth() != 2 or wf.getframerate() not in [8000, 16000]:
-                raise ValueError("O áudio deve estar em formato WAV com 1 canal, 16-bit e 16kHz ou 8kHz")
-
-            recognizer = KaldiRecognizer(model, wf.getframerate())
-            transcription = []
-
-            while True:
-                data = wf.readframes(4000)
-                if len(data) == 0:
-                    break
-                if recognizer.AcceptWaveform(data):
-                    result = json.loads(recognizer.Result())
-                    transcription.append(result.get("text", ""))
-
-            final_result = json.loads(recognizer.FinalResult())
-            transcription.append(final_result.get("text", ""))
-
-            return " ".join(transcription)
-
+        recognizer = sr.Recognizer()
+        with sr.AudioFile(audio_path) as source:
+            audio_data = recognizer.record(source)
+        return recognizer.recognize_sphinx(audio_data)
     except Exception as e:
-        st.error(f"Erro ao transcrever áudio com Vosk: {e}")
+        st.error(f"Erro ao transcrever áudio com SpeechRecognition: {e}")
         return "Transcrição indisponível."
 
 
@@ -202,8 +123,6 @@ def main():
     clip_length = st.selectbox("Escolha a duração dos cortes (em segundos)", [30, 40, 60, 80])
 
     if st.button("Gerar Cortes"):
-        model_path = download_vosk_model()  # Baixar o modelo Vosk Compacto
-
         if not youtube_url:
             st.error("Por favor, insira um link válido do YouTube.")
             return
@@ -226,7 +145,7 @@ def main():
         for i, (clip, start_time) in enumerate(st.session_state["clips"], start=1):
             thumbnail = extract_thumbnail(clip, start_time)
 
-            # Converter para WAV para usar no Vosk
+            # Converter para WAV para usar no SpeechRecognition
             wav_file = f"{os.path.splitext(clip)[0]}.wav"
             subprocess.run(
                 ["ffmpeg", "-y", "-i", clip, "-ac", "1", "-ar", "16000", wav_file],
@@ -234,7 +153,7 @@ def main():
                 stderr=subprocess.PIPE
             )
 
-            transcription = transcribe_audio_with_vosk(wav_file, model_path)
+            transcription = transcribe_audio_with_sphinx(wav_file)
             description = f"Descrição baseada na transcrição: {transcription}"
 
             col1, col2 = st.columns([1, 4])
