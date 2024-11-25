@@ -52,7 +52,7 @@ def get_video_duration(video_path):
         raise RuntimeError(f"Erro ao obter a duração do vídeo: {e}")
 
 
-def generate_clips(video_path, clip_length, num_clips=10, output_path="cuts"):
+def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_path="cuts"):
     """
     Gera cortes de vídeo a partir de um vídeo original, utilizando ffmpeg para processar.
     """
@@ -68,16 +68,19 @@ def generate_clips(video_path, clip_length, num_clips=10, output_path="cuts"):
             start_time = randint(0, int(video_duration - clip_length - 1))
             output_file = os.path.join(output_path, f"clip_{i + 1}.mp4")
 
-            subprocess.run(
-                [
-                    "ffmpeg", "-y", "-i", video_path,
-                    "-ss", str(start_time), "-t", str(clip_length),
-                    "-c:v", "libx264", "-c:a", "aac", output_file
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
-            )
+            ffmpeg_command = [
+                "ffmpeg", "-y", "-i", video_path,
+                "-ss", str(start_time), "-t", str(clip_length),
+                "-c:v", "libx264", "-c:a", "aac"
+            ]
 
+            # Ajuste da proporção
+            if aspect_ratio == "9:16":
+                ffmpeg_command += ["-vf", "crop=in_h*9/16:in_h"]
+            
+            ffmpeg_command.append(output_file)
+
+            subprocess.run(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             clips.append((output_file, start_time))
             progress_bar.progress(int((i + 1) / num_clips * 100))
 
@@ -127,6 +130,7 @@ def main():
 
     youtube_url = st.text_input("Link do vídeo do YouTube", "")
     clip_length = st.selectbox("Escolha a duração dos cortes (em segundos)", [30, 40, 60, 80])
+    aspect_ratio = st.selectbox("Escolha a proporção dos cortes", ["16:9", "9:16"])
 
     if st.button("Gerar Cortes"):
         if not youtube_url:
@@ -139,7 +143,7 @@ def main():
         if video_path:
             st.success("Vídeo baixado com sucesso!")
             with st.spinner("Gerando cortes..."):
-                clips = generate_clips(video_path, clip_length)
+                clips = generate_clips(video_path, clip_length, aspect_ratio)
                 if clips:
                     st.session_state["clips"] = clips
                     st.success("Cortes gerados com sucesso!")
