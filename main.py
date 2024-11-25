@@ -4,6 +4,7 @@ import streamlit as st
 from random import randint
 import subprocess
 import wave
+import json  # Import corrigido
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from PIL import Image
 import speech_recognition as sr
