@@ -14,23 +14,31 @@ import zipfile
 
 def download_vosk_model(model_path="/tmp/vosk-compact-model"):
     """
-    Baixa e extrai o modelo Vosk Compacto de um link externo (Google Drive).
+    Baixa e extrai o modelo Vosk Compacto de um link do Google Drive.
     """
     # Link direto do Google Drive
-    external_url = "https://drive.google.com/uc?id=19b_gnkqA7eJYqp51I9piKz1KfmdUUTNS&export=download"
+    drive_url = "https://drive.google.com/uc?id=19b_gnkqA7eJYqp51I9piKz1KfmdUUTNS&export=download"
 
     model_zip = "/tmp/vosk-compact-model.zip"
 
     if not os.path.exists(model_path) or not os.path.exists(os.path.join(model_path, "model.conf")):
         st.warning("Baixando o modelo Vosk Compacto. Isso pode levar alguns minutos.")
 
-        # Fazer o download do modelo
+        # Fazer o download do modelo com redirecionamento
         try:
-            response = requests.get(external_url, stream=True)
-            response.raise_for_status()  # Levanta exceção para erros HTTP
+            session = requests.Session()
+            response = session.get(drive_url, stream=True)
+            for key, value in response.cookies.items():
+                if key.startswith("download_warning"):
+                    drive_url = f"https://drive.google.com/uc?export=download&id=19b_gnkqA7eJYqp51I9piKz1KfmdUUTNS&confirm={value}"
+                    response = session.get(drive_url, stream=True)
+                    break
+
+            # Baixar o arquivo final
             with open(model_zip, "wb") as f:
                 for chunk in response.iter_content(chunk_size=1024):
-                    f.write(chunk)
+                    if chunk:  # Evita escrita de partes vazias
+                        f.write(chunk)
         except Exception as e:
             raise FileNotFoundError(f"Erro ao baixar o modelo Vosk: {e}")
 
@@ -59,6 +67,7 @@ def download_vosk_model(model_path="/tmp/vosk-compact-model"):
         st.success("Modelo Vosk Compacto baixado e extraído com sucesso!")
 
     return model_path
+
 
 
 def download_video(youtube_url, output_path="downloads"):
