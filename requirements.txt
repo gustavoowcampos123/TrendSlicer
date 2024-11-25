@@ -2,5 +2,5 @@ streamlit
 yt-dlp
 moviepy
 pillow
-vosk
+SpeechRecognition
 requests
