@@ -105,22 +105,22 @@ def extract_thumbnail(video_path, start_time, output_path="thumbnails"):
     return thumbnail_path
 
 
-def transcribe_audio_with_sphinx(audio_path):
+def transcribe_audio_with_google(audio_path):
     """
-    Transcreve o áudio de um arquivo usando SpeechRecognition com CMU Sphinx.
+    Transcreve o áudio de um arquivo usando SpeechRecognition com a API do Google.
     """
     try:
         recognizer = sr.Recognizer()
         with sr.AudioFile(audio_path) as source:
             audio_data = recognizer.record(source)
-        return recognizer.recognize_sphinx(audio_data)
+        return recognizer.recognize_google(audio_data, language="pt-BR")
     except sr.UnknownValueError:
         return "A transcrição não pôde ser realizada. Áudio inaudível ou não claro."
     except sr.RequestError as e:
-        st.error(f"Erro no SpeechRecognition: {e}")
-        return "Erro ao usar SpeechRecognition. Verifique o ambiente."
+        st.error(f"Erro na API do Google: {e}")
+        return "Erro ao usar a API do Google. Verifique sua conexão com a internet."
     except Exception as e:
-        st.error(f"Erro ao transcrever áudio com SpeechRecognition: {e}")
+        st.error(f"Erro ao transcrever áudio com Google SpeechRecognition: {e}")
         return "Transcrição indisponível."
 
 
@@ -163,7 +163,7 @@ def main():
                 stderr=subprocess.PIPE
             )
 
-            transcription = transcribe_audio_with_sphinx(wav_file)
+            transcription = transcribe_audio_with_google(wav_file)
             description = f"Descrição baseada na transcrição: {transcription}"
 
             col1, col2 = st.columns([1, 4])
