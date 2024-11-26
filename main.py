@@ -8,6 +8,7 @@ import json
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from PIL import Image
 import speech_recognition as sr
+import random
 
 
 def download_video(youtube_url, output_path="downloads"):
@@ -66,10 +67,11 @@ def summarize_description(description, max_words=5):
 
 def generate_hashtags(description, max_tags=5):
     """
-    Gera hashtags baseadas em palavras-chave da descrição.
+    Gera hashtags aleatórias com palavras maiores que 10 letras.
     """
-    words = description.split()
-    hashtags = ["#" + word.lower() for word in words if len(word) > 3][:max_tags]
+    words = [word for word in description.split() if len(word) > 10]
+    random.shuffle(words)  # Mistura as palavras
+    hashtags = ["#" + word.lower() for word in words[:max_tags]]
     return " ".join(hashtags)
 
 
