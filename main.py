@@ -23,6 +23,10 @@ def download_video(youtube_url, output_path="downloads"):
         ydl_opts = {
             'format': 'best[ext=mp4]',  # Seleciona o melhor formato em mp4
             'outtmpl': os.path.join(output_path, '%(title)s.%(ext)s'),  # Nome do arquivo
+            'retries': 10,  # Realiza até 10 tentativas em caso de falha
+            'fragment_retries': 10,  # Retries para fragmentos
+            'http_chunk_size': 1024 * 1024,  # Download em fragmentos de 1MB
+            'noprogress': True,  # Desabilita barra de progresso para reduzir logs
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
