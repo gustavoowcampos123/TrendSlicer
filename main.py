@@ -56,6 +56,14 @@ def get_video_duration(video_path):
         raise RuntimeError(f"Erro ao obter a duração do vídeo: {e}")
 
 
+def summarize_description(description, max_words=5):
+    """
+    Resume uma descrição pegando as primeiras palavras relevantes.
+    """
+    words = description.split()
+    return "_".join(words[:max_words]).replace(" ", "_")
+
+
 def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_path="cuts"):
     """
     Gera cortes de vídeo a partir de um vídeo original, utilizando ffmpeg para processar.
@@ -168,18 +176,19 @@ def main():
             )
 
             transcription = transcribe_audio_with_google(wav_file)
-            description = f"Descrição baseada na transcrição: {transcription}"
+            short_description = summarize_description(transcription)
+            clip_name = f"{short_description}_{i}.mp4"
 
             col1, col2 = st.columns([1, 4])
             with col1:
                 st.image(thumbnail, caption=f"Corte {i}", use_container_width=True)
             with col2:
-                st.write(description)
+                st.write(f"Descrição: {transcription}")
                 with open(clip, "rb") as f:
                     st.download_button(
-                        label=f"Baixar Corte {i}",
+                        label=f"Baixar {clip_name}",
                         data=f,
-                        file_name=os.path.basename(clip),
+                        file_name=clip_name,
                         mime="video/mp4"
                     )
 
