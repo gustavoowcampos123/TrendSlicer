@@ -61,7 +61,16 @@ def summarize_description(description, max_words=5):
     Resume uma descrição pegando as primeiras palavras relevantes.
     """
     words = description.split()
-    return "_".join(words[:max_words]).replace(" ", "_")
+    return " ".join(words[:max_words]).capitalize()
+
+
+def generate_hashtags(description, max_tags=5):
+    """
+    Gera hashtags baseadas em palavras-chave da descrição.
+    """
+    words = description.split()
+    hashtags = ["#" + word.lower() for word in words if len(word) > 3][:max_tags]
+    return " ".join(hashtags)
 
 
 def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_path="cuts"):
@@ -176,14 +185,17 @@ def main():
             )
 
             transcription = transcribe_audio_with_google(wav_file)
-            short_description = summarize_description(transcription)
-            clip_name = f"{short_description}_{i}.mp4"
+            short_title = summarize_description(transcription)
+            hashtags = generate_hashtags(transcription)
+            clip_name = f"{short_title.replace(' ', '_')}_{i}.mp4"
 
             col1, col2 = st.columns([1, 4])
             with col1:
                 st.image(thumbnail, caption=f"Corte {i}", use_container_width=True)
             with col2:
+                st.subheader(f"Título Sugerido: {short_title}")
                 st.write(f"Descrição: {transcription}")
+                st.write(f"Hashtags: {hashtags}")
                 with open(clip, "rb") as f:
                     st.download_button(
                         label=f"Baixar {clip_name}",
