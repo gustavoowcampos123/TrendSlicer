@@ -3,4 +3,3 @@ yt-dlp
 moviepy
 pillow
 SpeechRecognition
-pyaudio
