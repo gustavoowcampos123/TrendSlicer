@@ -2,5 +2,5 @@ streamlit
 yt-dlp
 moviepy
 pillow
-SpeechRecognition
-moviepy
+speechrecognition
+ffmpeg-python
