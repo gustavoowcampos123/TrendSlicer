@@ -59,12 +59,16 @@ def get_video_duration(video_path):
 
 def create_srt_file(transcription, output_srt, start_time, clip_length):
     """
-    Cria um arquivo de legendas SRT a partir da transcrição.
+    Cria um arquivo de legendas SRT a partir da transcrição, ajustando o tempo inicial.
     """
     try:
+        # Converter start_time para formato HH:MM:SS
+        start_time_hhmmss = f"{int(start_time // 3600):02}:{int((start_time % 3600) // 60):02}:{int(start_time % 60):02},000"
+        end_time_hhmmss = f"{int((start_time + clip_length) // 3600):02}:{int(((start_time + clip_length) % 3600) // 60):02}:{int((start_time + clip_length) % 60):02},000"
+        
         with open(output_srt, "w") as srt_file:
             srt_file.write("1\n")
-            srt_file.write(f"00:00:00,000 --> 00:00:{clip_length:02},000\n")
+            srt_file.write(f"{start_time_hhmmss} --> {end_time_hhmmss}\n")
             srt_file.write(transcription + "\n")
         return output_srt
     except Exception as e:
@@ -222,7 +226,7 @@ def main():
             hashtags = generate_hashtags(transcription)
             clip_name = f"{short_title.replace(' ', '_')}_{i}.mp4"
 
-            # Criar arquivo SRT
+            # Criar arquivo SRT com sincronização ajustada
             srt_file = f"{os.path.splitext(clip)[0]}.srt"
             create_srt_file(transcription, srt_file, start_time, clip_length)
 
