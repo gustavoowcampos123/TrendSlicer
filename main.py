@@ -57,6 +57,37 @@ def get_video_duration(video_path):
         raise RuntimeError(f"Erro ao obter a duração do vídeo: {e}")
 
 
+def create_srt_file(transcription, output_srt, start_time, clip_length):
+    """
+    Cria um arquivo de legendas SRT a partir da transcrição.
+    """
+    try:
+        with open(output_srt, "w") as srt_file:
+            srt_file.write("1\n")
+            srt_file.write(f"00:00:00,000 --> 00:00:{clip_length:02},000\n")
+            srt_file.write(transcription + "\n")
+        return output_srt
+    except Exception as e:
+        st.error(f"Erro ao criar arquivo SRT: {e}")
+        return None
+
+
+def add_subtitles_to_video(video_path, srt_path, output_path):
+    """
+    Adiciona legendas ao vídeo usando FFmpeg.
+    """
+    try:
+        output_video = os.path.splitext(output_path)[0] + "_subtitled.mp4"
+        ffmpeg_command = [
+            "ffmpeg", "-y", "-i", video_path, "-vf", f"subtitles={srt_path}", output_video
+        ]
+        subprocess.run(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return output_video
+    except Exception as e:
+        st.error(f"Erro ao adicionar legendas ao vídeo: {e}")
+        return None
+
+
 def summarize_description(description, max_words=5):
     """
     Resume uma descrição pegando as primeiras palavras relevantes.
@@ -174,7 +205,7 @@ def main():
                     st.error("Erro ao gerar os cortes.")
 
     if "clips" in st.session_state and st.session_state["clips"]:
-        st.write("Baixe os cortes abaixo com prévias:")
+        st.write("Baixe os cortes abaixo com prévias e legendas:")
         for i, (clip, start_time) in enumerate(st.session_state["clips"], start=1):
             thumbnail = extract_thumbnail(clip, start_time)
 
@@ -191,6 +222,13 @@ def main():
             hashtags = generate_hashtags(transcription)
             clip_name = f"{short_title.replace(' ', '_')}_{i}.mp4"
 
+            # Criar arquivo SRT
+            srt_file = f"{os.path.splitext(clip)[0]}.srt"
+            create_srt_file(transcription, srt_file, start_time, clip_length)
+
+            # Adicionar legendas ao vídeo
+            subtitled_clip = add_subtitles_to_video(clip, srt_file, clip)
+
             col1, col2 = st.columns([1, 4])
             with col1:
                 st.image(thumbnail, caption=f"Corte {i}", use_container_width=True)
@@ -198,9 +236,9 @@ def main():
                 st.subheader(f"Título Sugerido: {short_title}")
                 st.write(f"Descrição: {transcription}")
                 st.write(f"Hashtags: {hashtags}")
-                with open(clip, "rb") as f:
+                with open(subtitled_clip, "rb") as f:
                     st.download_button(
-                        label=f"Baixar {clip_name}",
+                        label=f"Baixar {clip_name} com Legendas",
                         data=f,
                         file_name=clip_name,
                         mime="video/mp4"
