@@ -1,6 +1,6 @@
 streamlit
 yt-dlp
-moviepy
+opencv-python
 pillow
 speechrecognition
 ffmpeg-python
