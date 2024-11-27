@@ -1,4 +1,6 @@
 streamlit
-pytube
-youtube-transcript-api
+yt-dlp
+moviepy
+pillow
+speechrecognition
 ffmpeg-python
