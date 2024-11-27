@@ -70,12 +70,11 @@ def create_srt_file(transcription, output_srt, start_time, clip_length):
             srt_file.write(f"{start_time_hhmmss} --> {end_time_hhmmss}\n")
             srt_file.write(transcription + "\n")
         
-        # Validar arquivo gerado
-        if os.path.exists(output_srt) and os.path.getsize(output_srt) > 0:
-            return output_srt
-        else:
-            st.error("Arquivo SRT não foi gerado corretamente.")
-            return None
+        # Validar se o arquivo foi gerado
+        if not os.path.exists(output_srt) or os.path.getsize(output_srt) == 0:
+            raise RuntimeError("Arquivo SRT não foi gerado ou está vazio.")
+        
+        return output_srt
     except Exception as e:
         st.error(f"Erro ao criar arquivo SRT: {e}")
         return None
@@ -87,14 +86,20 @@ def add_subtitles_to_video(video_path, srt_path, output_path):
     """
     try:
         output_video = os.path.splitext(output_path)[0] + "_subtitled.mp4"
+        # Garantir caminho absoluto do arquivo SRT
+        srt_path_absolute = os.path.abspath(srt_path)
+        if os.name == "nt":  # Windows precisa de barras duplas no caminho
+            srt_path_absolute = srt_path_absolute.replace("\\", "\\\\")
+
         ffmpeg_command = [
             "ffmpeg", "-y", "-i", video_path,
-            "-vf", f"subtitles={os.path.abspath(srt_path)}",
+            "-vf", f"subtitles={srt_path_absolute}",
             output_video
         ]
+
         result = subprocess.run(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
-        # Checar por erros
+        # Validar retorno do FFmpeg
         if result.returncode != 0:
             st.error(f"Erro no FFmpeg ao adicionar legendas: {result.stderr}")
             return None
@@ -239,7 +244,7 @@ def main():
             hashtags = generate_hashtags(transcription)
             clip_name = f"{short_title.replace(' ', '_')}_{i}.mp4"
 
-            # Criar arquivo SRT com sincronização ajustada
+            # Criar arquivo SRT com validação
             srt_file = f"{os.path.splitext(clip)[0]}.srt"
             srt_path = create_srt_file(transcription, srt_file, start_time, clip_length)
 
