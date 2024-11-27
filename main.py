@@ -82,7 +82,7 @@ def create_srt_file(transcription, output_srt, start_time, clip_length):
 
 def add_subtitles_to_video(video_path, srt_path, output_path):
     """
-    Adiciona legendas ao vídeo usando FFmpeg.
+    Adiciona legendas ao vídeo usando FFmpeg, posicionando-as no meio da tela.
     """
     try:
         output_video = os.path.splitext(output_path)[0] + "_subtitled.mp4"
@@ -91,9 +91,10 @@ def add_subtitles_to_video(video_path, srt_path, output_path):
         if os.name == "nt":  # Windows precisa de barras duplas no caminho
             srt_path_absolute = srt_path_absolute.replace("\\", "\\\\")
 
+        # Comando FFmpeg com configuração de estilo para centralizar legendas
         ffmpeg_command = [
             "ffmpeg", "-y", "-i", video_path,
-            "-vf", f"subtitles={srt_path_absolute}",
+            "-vf", f"subtitles={srt_path_absolute}:force_style='Alignment=2'",
             output_video
         ]
 
