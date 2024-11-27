@@ -5,8 +5,8 @@ from random import randint
 import subprocess
 import wave
 import json
+import cv2
 from moviepy.video.io.VideoFileClip import VideoFileClip
-from moviepy.editor import TextClip, CompositeVideoClip
 from PIL import Image
 import speech_recognition as sr
 import random
@@ -148,35 +148,48 @@ def transcribe_audio_with_google(audio_path):
         return "Transcrição indisponível."
 
 
-def add_subtitles_with_moviepy(video_path, transcription, start_time, clip_length, output_path):
+def add_subtitles_with_opencv(video_path, transcription, start_time, clip_length, output_path):
     """
-    Adiciona legendas ao vídeo usando MoviePy.
+    Adiciona legendas diretamente no vídeo usando OpenCV.
     """
     try:
-        # Carregar o clipe de vídeo original
-        video_clip = VideoFileClip(video_path)
-
-        # Criar o clipe de texto com a transcrição
-        subtitle = TextClip(
-            transcription,
-            fontsize=24,
-            color="white",
-            font="Arial",
-            bg_color="black",  # Fundo preto
-            size=(video_clip.w * 0.9, None),  # Largura 90% do vídeo
-            method="caption"
-        ).set_position(("center", "bottom")).set_duration(clip_length)
-
-        # Compor o vídeo original com o clipe de legenda
-        video_with_subtitles = CompositeVideoClip([video_clip, subtitle])
-
-        # Salvar o vídeo com legendas
+        # Abrir vídeo
+        cap = cv2.VideoCapture(video_path)
+        fps = int(cap.get(cv2.CAP_PROP_FPS))
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         output_video = os.path.splitext(output_path)[0] + "_subtitled.mp4"
-        video_with_subtitles.write_videofile(output_video, codec="libx264", audio_codec="aac")
+        out = cv2.VideoWriter(output_video, fourcc, fps, (width, height))
 
+        # Processar frames e adicionar legenda
+        frame_count = 0
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        text_position = (int(width * 0.1), int(height * 0.9))  # Posição do texto
+
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            # Adicionar legenda apenas durante o clipe
+            current_time = frame_count / fps
+            if start_time <= current_time <= (start_time + clip_length):
+                cv2.putText(
+                    frame, transcription, text_position, cv2.FONT_HERSHEY_SIMPLEX,
+                    fontScale=1, color=(255, 255, 255), thickness=2, lineType=cv2.LINE_AA
+                )
+
+            out.write(frame)
+            frame_count += 1
+            if frame_count >= total_frames:
+                break
+
+        cap.release()
+        out.release()
         return output_video
     except Exception as e:
-        st.error(f"Erro ao adicionar legendas com MoviePy: {e}")
+        st.error(f"Erro ao adicionar legendas com OpenCV: {e}")
         return None
 
 
@@ -224,8 +237,8 @@ def main():
             hashtags = generate_hashtags(transcription)
             clip_name = f"{short_title.replace(' ', '_')}_{i}.mp4"
 
-            # Adicionar legendas ao vídeo usando MoviePy
-            subtitled_clip = add_subtitles_with_moviepy(clip, transcription, start_time, clip_length, clip)
+            # Adicionar legendas ao vídeo usando OpenCV
+            subtitled_clip = add_subtitles_with_opencv(clip, transcription, start_time, clip_length, clip)
 
             if subtitled_clip:
                 col1, col2 = st.columns([1, 4])
