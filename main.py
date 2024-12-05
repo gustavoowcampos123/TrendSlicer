@@ -1,14 +1,14 @@
 import os
-import shutil
 import streamlit as st
 from random import randint
 import subprocess
-import wave
 import json
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from PIL import Image
-import speech_recognition as sr
-import random
+import logging
+
+# Configurar logs
+logging.basicConfig(level=logging.DEBUG, filename="ffmpeg.log", filemode="w")
 
 
 def download_video(youtube_url, output_path="downloads"):
@@ -22,12 +22,12 @@ def download_video(youtube_url, output_path="downloads"):
             os.makedirs(output_path)
 
         ydl_opts = {
-            'format': 'best[ext=mp4]',  # Seleciona o melhor formato em mp4
-            'outtmpl': os.path.join(output_path, '%(title)s.%(ext)s'),  # Nome do arquivo
-            'retries': 10,  # Realiza até 10 tentativas em caso de falha
-            'fragment_retries': 10,  # Retries para fragmentos
-            'http_chunk_size': 1024 * 1024,  # Download em fragmentos de 1MB
-            'noprogress': True,  # Desabilita barra de progresso para reduzir logs
+            'format': 'best[ext=mp4]',
+            'outtmpl': os.path.join(output_path, '%(title)s.%(ext)s'),
+            'retries': 10,
+            'fragment_retries': 10,
+            'http_chunk_size': 1024 * 1024,
+            'noprogress': True,
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -44,17 +44,30 @@ def get_video_duration(video_path):
     Usa ffprobe para obter a duração total do vídeo.
     """
     try:
-        ffprobe_path = "ffprobe"
         result = subprocess.run(
-            [ffprobe_path, "-v", "error", "-show_entries", "format=duration", "-of", "json", video_path],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "json", video_path],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
         )
         info = json.loads(result.stdout)
         return float(info["format"]["duration"])
     except Exception as e:
         raise RuntimeError(f"Erro ao obter a duração do vídeo: {e}")
+
+
+def is_video_valid(video_path):
+    """
+    Valida se o vídeo pode ser lido corretamente usando FFmpeg.
+    """
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-v", "error", "-i", video_path, "-f", "null", "-"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
 
 
 def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_path="cuts"):
@@ -65,10 +78,7 @@ def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_p
         if not os.path.exists(output_path):
             os.makedirs(output_path)
 
-        # Obter duração do vídeo
         video_duration = get_video_duration(video_path)
-
-        # Garantir que a duração do clipe não seja maior que a duração total do vídeo
         if clip_length > video_duration:
             st.error("A duração do clipe é maior que a duração total do vídeo.")
             return None
@@ -77,7 +87,6 @@ def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_p
         progress_bar = st.progress(0)
 
         for i in range(num_clips):
-            # Garantir que o start_time seja válido
             max_start_time = video_duration - clip_length
             if max_start_time <= 0:
                 st.warning("Não é possível gerar cortes porque o clipe é maior ou igual à duração do vídeo.")
@@ -89,17 +98,23 @@ def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_p
             ffmpeg_command = [
                 "ffmpeg", "-y", "-i", video_path,
                 "-ss", str(start_time), "-t", str(clip_length),
-                "-c:v", "libx264", "-c:a", "aac"
+                "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                "-c:a", "aac", "-strict", "experimental", output_file
             ]
 
-            # Ajuste da proporção
-            if aspect_ratio == "9:16":
-                ffmpeg_command += ["-vf", "crop=in_h*9/16:in_h"]
-            
-            ffmpeg_command.append(output_file)
+            logging.debug(f"Comando FFmpeg: {' '.join(ffmpeg_command)}")
+            result = subprocess.run(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            logging.debug(f"Saída FFmpeg: {result.stderr}")
 
-            subprocess.run(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            clips.append((output_file, start_time))
+            if result.returncode != 0 or not os.path.exists(output_file) or os.path.getsize(output_file) == 0:
+                st.warning(f"Erro ao gerar o clipe {i + 1}. O comando FFmpeg falhou.")
+                continue
+
+            if is_video_valid(output_file):
+                clips.append((output_file, start_time))
+            else:
+                st.warning(f"O clipe {i + 1} está corrompido e foi ignorado.")
+
             progress_bar.progress(int((i + 1) / num_clips * 100))
 
         return clips
@@ -157,21 +172,23 @@ def main():
     if "clips" in st.session_state and st.session_state["clips"]:
         st.write("Baixe os cortes abaixo com prévias:")
         for i, (clip, start_time) in enumerate(st.session_state["clips"], start=1):
-            thumbnail = extract_thumbnail(clip, start_time)
-
-            if thumbnail:
-                col1, col2 = st.columns([1, 4])
-                with col1:
-                    st.image(thumbnail, caption=f"Corte {i}", use_container_width=True)
-                with col2:
-                    st.subheader(f"Corte {i}")
-                    with open(clip, "rb") as f:
-                        st.download_button(
-                            label=f"Baixar Corte {i}",
-                            data=f,
-                            file_name=os.path.basename(clip),
-                            mime="video/mp4"
-                        )
+            try:
+                thumbnail = extract_thumbnail(clip, start_time)
+                if thumbnail:
+                    col1, col2 = st.columns([1, 4])
+                    with col1:
+                        st.image(thumbnail, caption=f"Corte {i}", use_container_width=True)
+                    with col2:
+                        st.subheader(f"Corte {i}")
+                        with open(clip, "rb") as f:
+                            st.download_button(
+                                label=f"Baixar Corte {i}",
+                                data=f,
+                                file_name=os.path.basename(clip),
+                                mime="video/mp4"
+                            )
+            except Exception as e:
+                st.error(f"Erro ao processar o clipe {i}: {e}")
 
 
 if __name__ == "__main__":
