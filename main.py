@@ -57,40 +57,6 @@ def get_video_duration(video_path):
         raise RuntimeError(f"Erro ao obter a duração do vídeo: {e}")
 
 
-def validate_start_time(video_path, start_time):
-    """
-    Valida se o tempo inicial é válido para o vídeo.
-    """
-    duration = get_video_duration(video_path)
-    if start_time < 0 or start_time > duration:
-        raise ValueError(f"Tempo inicial ({start_time}s) está fora do intervalo permitido (0 a {duration}s).")
-
-
-def extract_thumbnail(video_path, start_time, output_path="thumbnails"):
-    """
-    Extrai uma imagem de pré-visualização do clipe no início do vídeo.
-    """
-    try:
-        if not os.path.exists(output_path):
-            os.makedirs(output_path)
-
-        validate_start_time(video_path, start_time)
-
-        thumbnail_path = os.path.join(output_path, f"thumbnail_{os.path.basename(video_path)}.jpg")
-        with VideoFileClip(video_path) as video:
-            frame = video.get_frame(start_time)
-            image = Image.fromarray(frame)
-            image.save(thumbnail_path)
-
-        return thumbnail_path
-    except ValueError as ve:
-        st.error(f"Erro no tempo inicial: {ve}")
-        return None
-    except Exception as e:
-        st.error(f"Erro ao extrair miniatura: {e}")
-        return None
-
-
 def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_path="cuts"):
     """
     Gera cortes de vídeo a partir de um vídeo original, utilizando ffmpeg para processar.
@@ -99,19 +65,25 @@ def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_p
         if not os.path.exists(output_path):
             os.makedirs(output_path)
 
+        # Obter duração do vídeo
         video_duration = get_video_duration(video_path)
+
+        # Garantir que a duração do clipe não seja maior que a duração total do vídeo
+        if clip_length > video_duration:
+            st.error("A duração do clipe é maior que a duração total do vídeo.")
+            return None
+
         clips = []
         progress_bar = st.progress(0)
 
         for i in range(num_clips):
-            start_time = randint(0, int(video_duration - clip_length - 1))
+            # Garantir que o start_time seja válido
+            max_start_time = video_duration - clip_length
+            if max_start_time <= 0:
+                st.warning("Não é possível gerar cortes porque o clipe é maior ou igual à duração do vídeo.")
+                return None
 
-            try:
-                validate_start_time(video_path, start_time)
-            except ValueError as e:
-                st.warning(f"Corte {i + 1} ignorado: {e}")
-                continue
-
+            start_time = randint(0, int(max_start_time))
             output_file = os.path.join(output_path, f"clip_{i + 1}.mp4")
 
             ffmpeg_command = [
@@ -133,6 +105,26 @@ def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_p
         return clips
     except Exception as e:
         st.error(f"Erro ao gerar os cortes: {e}")
+        return None
+
+
+def extract_thumbnail(video_path, start_time, output_path="thumbnails"):
+    """
+    Extrai uma imagem de pré-visualização do clipe no início do vídeo.
+    """
+    try:
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+
+        thumbnail_path = os.path.join(output_path, f"thumbnail_{os.path.basename(video_path)}.jpg")
+        with VideoFileClip(video_path) as video:
+            frame = video.get_frame(start_time)
+            image = Image.fromarray(frame)
+            image.save(thumbnail_path)
+
+        return thumbnail_path
+    except Exception as e:
+        st.error(f"Erro ao extrair miniatura: {e}")
         return None
 
 
