@@ -62,6 +62,7 @@ def create_srt_file(transcription, output_srt, start_time, clip_length):
     Cria um arquivo de legendas SRT a partir da transcrição, ajustando o tempo inicial.
     """
     try:
+        # Converter start_time para formato HH:MM:SS
         start_time_hhmmss = f"{int(start_time // 3600):02}:{int((start_time % 3600) // 60):02}:{int(start_time % 60):02},000"
         end_time_hhmmss = f"{int((start_time + clip_length) // 3600):02}:{int(((start_time + clip_length) % 3600) // 60):02}:{int((start_time + clip_length) % 60):02},000"
         
@@ -69,13 +70,7 @@ def create_srt_file(transcription, output_srt, start_time, clip_length):
             srt_file.write("1\n")
             srt_file.write(f"{start_time_hhmmss} --> {end_time_hhmmss}\n")
             srt_file.write(transcription + "\n")
-        
-        # Validar arquivo gerado
-        if os.path.exists(output_srt) and os.path.getsize(output_srt) > 0:
-            return output_srt
-        else:
-            st.error("Arquivo SRT não foi gerado corretamente.")
-            return None
+        return output_srt
     except Exception as e:
         st.error(f"Erro ao criar arquivo SRT: {e}")
         return None
@@ -88,17 +83,9 @@ def add_subtitles_to_video(video_path, srt_path, output_path):
     try:
         output_video = os.path.splitext(output_path)[0] + "_subtitled.mp4"
         ffmpeg_command = [
-            "ffmpeg", "-y", "-i", video_path,
-            "-vf", f"subtitles={os.path.abspath(srt_path)}",
-            output_video
+            "ffmpeg", "-y", "-i", video_path, "-vf", f"subtitles={srt_path}", output_video
         ]
-        result = subprocess.run(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-
-        # Checar por erros
-        if result.returncode != 0:
-            st.error(f"Erro no FFmpeg ao adicionar legendas: {result.stderr}")
-            return None
-
+        subprocess.run(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return output_video
     except Exception as e:
         st.error(f"Erro ao adicionar legendas ao vídeo: {e}")
@@ -241,31 +228,25 @@ def main():
 
             # Criar arquivo SRT com sincronização ajustada
             srt_file = f"{os.path.splitext(clip)[0]}.srt"
-            srt_path = create_srt_file(transcription, srt_file, start_time, clip_length)
+            create_srt_file(transcription, srt_file, start_time, clip_length)
 
-            if srt_path:
-                # Adicionar legendas ao vídeo
-                subtitled_clip = add_subtitles_to_video(clip, srt_path, clip)
+            # Adicionar legendas ao vídeo
+            subtitled_clip = add_subtitles_to_video(clip, srt_file, clip)
 
-                if subtitled_clip:
-                    col1, col2 = st.columns([1, 4])
-                    with col1:
-                        st.image(thumbnail, caption=f"Corte {i}", use_container_width=True)
-                    with col2:
-                        st.subheader(f"Título Sugerido: {short_title}")
-                        st.write(f"Descrição: {transcription}")
-                        st.write(f"Hashtags: {hashtags}")
-                        with open(subtitled_clip, "rb") as f:
-                            st.download_button(
-                                label=f"Baixar {clip_name} com Legendas",
-                                data=f,
-                                file_name=clip_name,
-                                mime="video/mp4"
-                            )
-                else:
-                    st.error(f"Não foi possível adicionar legendas ao vídeo {clip_name}.")
-            else:
-                st.error(f"Erro ao gerar legendas para o vídeo {clip_name}.")
+            col1, col2 = st.columns([1, 4])
+            with col1:
+                st.image(thumbnail, caption=f"Corte {i}", use_container_width=True)
+            with col2:
+                st.subheader(f"Título Sugerido: {short_title}")
+                st.write(f"Descrição: {transcription}")
+                st.write(f"Hashtags: {hashtags}")
+                with open(subtitled_clip, "rb") as f:
+                    st.download_button(
+                        label=f"Baixar {clip_name} com Legendas",
+                        data=f,
+                        file_name=clip_name,
+                        mime="video/mp4"
+                    )
 
 
 if __name__ == "__main__":
