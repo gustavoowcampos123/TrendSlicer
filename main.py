@@ -5,7 +5,6 @@ from random import randint
 import subprocess
 import wave
 import json
-import cv2
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from PIL import Image
 import speech_recognition as sr
@@ -58,22 +57,38 @@ def get_video_duration(video_path):
         raise RuntimeError(f"Erro ao obter a duração do vídeo: {e}")
 
 
-def summarize_description(description, max_words=5):
+def validate_start_time(video_path, start_time):
     """
-    Resume uma descrição pegando as primeiras palavras relevantes.
+    Valida se o tempo inicial é válido para o vídeo.
     """
-    words = description.split()
-    return " ".join(words[:max_words]).capitalize()
+    duration = get_video_duration(video_path)
+    if start_time < 0 or start_time > duration:
+        raise ValueError(f"Tempo inicial ({start_time}s) está fora do intervalo permitido (0 a {duration}s).")
 
 
-def generate_hashtags(description, max_tags=5):
+def extract_thumbnail(video_path, start_time, output_path="thumbnails"):
     """
-    Gera hashtags aleatórias com palavras maiores que 10 letras.
+    Extrai uma imagem de pré-visualização do clipe no início do vídeo.
     """
-    words = [word for word in description.split() if len(word) > 10]
-    random.shuffle(words)  # Mistura as palavras
-    hashtags = ["#" + word.lower() for word in words[:max_tags]]
-    return " ".join(hashtags)
+    try:
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+
+        validate_start_time(video_path, start_time)
+
+        thumbnail_path = os.path.join(output_path, f"thumbnail_{os.path.basename(video_path)}.jpg")
+        with VideoFileClip(video_path) as video:
+            frame = video.get_frame(start_time)
+            image = Image.fromarray(frame)
+            image.save(thumbnail_path)
+
+        return thumbnail_path
+    except ValueError as ve:
+        st.error(f"Erro no tempo inicial: {ve}")
+        return None
+    except Exception as e:
+        st.error(f"Erro ao extrair miniatura: {e}")
+        return None
 
 
 def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_path="cuts"):
@@ -90,6 +105,13 @@ def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_p
 
         for i in range(num_clips):
             start_time = randint(0, int(video_duration - clip_length - 1))
+
+            try:
+                validate_start_time(video_path, start_time)
+            except ValueError as e:
+                st.warning(f"Corte {i + 1} ignorado: {e}")
+                continue
+
             output_file = os.path.join(output_path, f"clip_{i + 1}.mp4")
 
             ffmpeg_command = [
@@ -111,85 +133,6 @@ def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_p
         return clips
     except Exception as e:
         st.error(f"Erro ao gerar os cortes: {e}")
-        return None
-
-
-def extract_thumbnail(video_path, start_time, output_path="thumbnails"):
-    """
-    Extrai uma imagem de pré-visualização do clipe no início do vídeo.
-    """
-    if not os.path.exists(output_path):
-        os.makedirs(output_path)
-
-    thumbnail_path = os.path.join(output_path, f"thumbnail_{os.path.basename(video_path)}.jpg")
-    with VideoFileClip(video_path) as video:
-        frame = video.get_frame(start_time)
-        image = Image.fromarray(frame)
-        image.save(thumbnail_path)
-    return thumbnail_path
-
-
-def transcribe_audio_with_google(audio_path):
-    """
-    Transcreve o áudio de um arquivo usando SpeechRecognition com a API do Google.
-    """
-    try:
-        recognizer = sr.Recognizer()
-        with sr.AudioFile(audio_path) as source:
-            audio_data = recognizer.record(source)
-        return recognizer.recognize_google(audio_data, language="pt-BR")
-    except sr.UnknownValueError:
-        return "A transcrição não pôde ser realizada. Áudio inaudível ou não claro."
-    except sr.RequestError as e:
-        st.error(f"Erro na API do Google: {e}")
-        return "Erro ao usar a API do Google. Verifique sua conexão com a internet."
-    except Exception as e:
-        st.error(f"Erro ao transcrever áudio com Google SpeechRecognition: {e}")
-        return "Transcrição indisponível."
-
-
-def add_subtitles_with_opencv(video_path, transcription, start_time, clip_length, output_path):
-    """
-    Adiciona legendas diretamente no vídeo usando OpenCV.
-    """
-    try:
-        # Abrir vídeo
-        cap = cv2.VideoCapture(video_path)
-        fps = int(cap.get(cv2.CAP_PROP_FPS))
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        output_video = os.path.splitext(output_path)[0] + "_subtitled.mp4"
-        out = cv2.VideoWriter(output_video, fourcc, fps, (width, height))
-
-        # Processar frames e adicionar legenda
-        frame_count = 0
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        text_position = (int(width * 0.1), int(height * 0.9))  # Posição do texto
-
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            # Adicionar legenda apenas durante o clipe
-            current_time = frame_count / fps
-            if start_time <= current_time <= (start_time + clip_length):
-                cv2.putText(
-                    frame, transcription, text_position, cv2.FONT_HERSHEY_SIMPLEX,
-                    fontScale=1, color=(255, 255, 255), thickness=2, lineType=cv2.LINE_AA
-                )
-
-            out.write(frame)
-            frame_count += 1
-            if frame_count >= total_frames:
-                break
-
-        cap.release()
-        out.release()
-        return output_video
-    except Exception as e:
-        st.error(f"Erro ao adicionar legendas com OpenCV: {e}")
         return None
 
 
@@ -220,43 +163,23 @@ def main():
                     st.error("Erro ao gerar os cortes.")
 
     if "clips" in st.session_state and st.session_state["clips"]:
-        st.write("Baixe os cortes abaixo com prévias e legendas:")
+        st.write("Baixe os cortes abaixo com prévias:")
         for i, (clip, start_time) in enumerate(st.session_state["clips"], start=1):
             thumbnail = extract_thumbnail(clip, start_time)
 
-            # Converter para WAV para usar no SpeechRecognition
-            wav_file = f"{os.path.splitext(clip)[0]}.wav"
-            subprocess.run(
-                ["ffmpeg", "-y", "-i", clip, "-ac", "1", "-ar", "16000", wav_file],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
-            )
-
-            transcription = transcribe_audio_with_google(wav_file)
-            short_title = summarize_description(transcription)
-            hashtags = generate_hashtags(transcription)
-            clip_name = f"{short_title.replace(' ', '_')}_{i}.mp4"
-
-            # Adicionar legendas ao vídeo usando OpenCV
-            subtitled_clip = add_subtitles_with_opencv(clip, transcription, start_time, clip_length, clip)
-
-            if subtitled_clip:
+            if thumbnail:
                 col1, col2 = st.columns([1, 4])
                 with col1:
                     st.image(thumbnail, caption=f"Corte {i}", use_container_width=True)
                 with col2:
-                    st.subheader(f"Título Sugerido: {short_title}")
-                    st.write(f"Descrição: {transcription}")
-                    st.write(f"Hashtags: {hashtags}")
-                    with open(subtitled_clip, "rb") as f:
+                    st.subheader(f"Corte {i}")
+                    with open(clip, "rb") as f:
                         st.download_button(
-                            label=f"Baixar {clip_name} com Legendas",
+                            label=f"Baixar Corte {i}",
                             data=f,
-                            file_name=clip_name,
+                            file_name=os.path.basename(clip),
                             mime="video/mp4"
                         )
-            else:
-                st.error(f"Não foi possível adicionar legendas ao vídeo {clip_name}.")
 
 
 if __name__ == "__main__":
