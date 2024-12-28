@@ -74,10 +74,11 @@ def extract_thumbnail_ffmpeg(video_path, start_time, output_path="thumbnails"):
 
         thumbnail_path = os.path.join(output_path, f"thumbnail_{os.path.basename(video_path)}.jpg")
         ffmpeg_command = [
-            "ffmpeg", "-y", "-i", video_path, "-ss", str(start_time), "-vframes", "1", thumbnail_path
+            "ffmpeg", "-y", "-i", video_path, "-ss", str(start_time),
+            "-vframes", "1", "-vf", "scale=640:-1", "-pix_fmt", "yuvj420p", thumbnail_path
         ]
         result = subprocess.run(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        if result.returncode != 0 or not os.path.exists(thumbnail_path):
+        if result.returncode != 0 or not os.path.exists(thumbnail_path) or os.path.getsize(thumbnail_path) == 0:
             raise RuntimeError(f"Erro ao extrair miniatura: {result.stderr}")
         return thumbnail_path
     except Exception as e:
