@@ -3,7 +3,6 @@ import subprocess
 import streamlit as st
 from random import randint
 import json
-from PIL import Image
 import speech_recognition as sr
 
 
@@ -62,28 +61,6 @@ def is_video_valid(video_path):
         return result.returncode == 0
     except Exception:
         return False
-
-
-def extract_thumbnail_ffmpeg(video_path, start_time, output_path="thumbnails"):
-    """
-    Extrai uma miniatura do vídeo usando FFmpeg.
-    """
-    try:
-        if not os.path.exists(output_path):
-            os.makedirs(output_path)
-
-        thumbnail_path = os.path.join(output_path, f"thumbnail_{os.path.basename(video_path)}.jpg")
-        ffmpeg_command = [
-            "ffmpeg", "-y", "-i", video_path, "-ss", str(start_time),
-            "-vframes", "1", "-vf", "scale=640:-1", "-pix_fmt", "yuvj420p", thumbnail_path
-        ]
-        result = subprocess.run(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        if result.returncode != 0 or not os.path.exists(thumbnail_path) or os.path.getsize(thumbnail_path) == 0:
-            raise RuntimeError(f"Erro ao extrair miniatura: {result.stderr}")
-        return thumbnail_path
-    except Exception as e:
-        st.error(f"Erro ao extrair miniatura: {e}")
-        return None
 
 
 def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_path="cuts"):
@@ -186,17 +163,8 @@ def main():
                     st.error("Erro ao gerar os cortes.")
 
     if "clips" in st.session_state and st.session_state["clips"]:
-        st.write("Baixe os cortes abaixo com prévias:")
+        st.write("Baixe os cortes abaixo:")
         for i, (clip, start_time) in enumerate(st.session_state["clips"], start=1):
-            if not is_video_valid(clip):
-                st.warning(f"O clipe {i} está corrompido e foi ignorado.")
-                continue
-
-            thumbnail = extract_thumbnail_ffmpeg(clip, start_time)
-            if not thumbnail:
-                st.warning(f"Miniatura do clipe {i} não pôde ser gerada.")
-                continue
-
             wav_file = f"{os.path.splitext(clip)[0]}.wav"
             subprocess.run(
                 ["ffmpeg", "-y", "-i", clip, "-ac", "1", "-ar", "16000", wav_file],
@@ -209,7 +177,7 @@ def main():
 
             col1, col2 = st.columns([1, 4])
             with col1:
-                st.image(thumbnail, caption=f"Corte {i}", use_container_width=True)
+                st.write(f"Corte {i}")
             with col2:
                 st.write(description)
                 with open(clip, "rb") as f:
