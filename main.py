@@ -4,6 +4,7 @@ import streamlit as st
 from random import randint
 import json
 import speech_recognition as sr
+import re
 
 
 def download_video(youtube_url, output_path="downloads"):
@@ -28,10 +29,30 @@ def download_video(youtube_url, output_path="downloads"):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(youtube_url, download=True)
             video_path = ydl.prepare_filename(info)
-            return video_path
+
+            # Gerar um nome de arquivo baseado na descrição
+            description = info.get("description", "").strip()
+            title = generate_title_from_description(description)
+            new_video_path = os.path.join(output_path, f"{title}.mp4")
+            os.rename(video_path, new_video_path)
+
+            return new_video_path
     except Exception as e:
         st.error(f"Erro ao baixar o vídeo: {e}")
         return None
+
+
+def generate_title_from_description(description):
+    """
+    Gera um título baseado na descrição do vídeo.
+    """
+    if not description:
+        return "video_sem_titulo"
+
+    # Selecionar as primeiras palavras relevantes
+    words = re.findall(r"\b\w+\b", description)
+    title = "_".join(words[:5]).lower()  # Usar até 5 palavras
+    return re.sub(r"[^a-zA-Z0-9_]+", "", title)  # Remover caracteres especiais
 
 
 def get_video_duration(video_path):
