@@ -88,11 +88,13 @@ def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_p
                 "ffmpeg", "-y", "-i", video_path,
                 "-ss", str(start_time), "-t", str(clip_length),
                 "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-                "-c:a", "aac", "-strict", "experimental", output_file
+                "-c:a", "aac", "-strict", "experimental"
             ]
 
             if aspect_ratio == "9:16":
-                ffmpeg_command += ["-vf", "crop=in_h*9/16:in_h"]
+                ffmpeg_command += ["-vf", "crop=in_h*9/16:in_h,scale=1080:1920"]
+
+            ffmpeg_command.append(output_file)
 
             result = subprocess.run(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
