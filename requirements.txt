@@ -3,3 +3,4 @@ yt-dlp
 speechrecognition
 pillow
 moviepy
+streamlink
