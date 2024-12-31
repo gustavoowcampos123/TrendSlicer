@@ -89,23 +89,46 @@ def is_video_valid(video_path):
     except Exception:
         return False
 
-def transcribe_audio_with_google(audio_path):
+def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_path="cuts"):
     """
-    Transcreve o áudio de um arquivo usando SpeechRecognition com a API do Google.
+    Gera cortes de vídeo a partir de um vídeo original.
     """
     try:
-        recognizer = sr.Recognizer()
-        with sr.AudioFile(audio_path) as source:
-            audio_data = recognizer.record(source)
-        return recognizer.recognize_google(audio_data, language="pt-BR")
-    except sr.UnknownValueError:
-        return "A transcrição não pôde ser realizada. Áudio inaudível ou não claro."
-    except sr.RequestError as e:
-        st.error(f"Erro na API do Google: {e}")
-        return "Erro ao usar a API do Google."
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+
+        video_duration = get_video_duration(video_path)
+        clips = []
+        progress_bar = st.progress(0)
+
+        for i in range(num_clips):
+            start_time = randint(0, int(video_duration - clip_length - 1))
+            output_file = os.path.join(output_path, f"clip_{i + 1}.mp4")
+
+            ffmpeg_command = [
+                "ffmpeg", "-y", "-i", video_path,
+                "-ss", str(start_time), "-t", str(clip_length),
+                "-c:v", "libx264", "-c:a", "aac"
+            ]
+
+            if aspect_ratio == "9:16":
+                ffmpeg_command += ["-vf", "crop=in_h*9/16:in_h"]
+
+            ffmpeg_command.append(output_file)
+
+            result = subprocess.run(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+            if result.returncode == 0 and is_video_valid(output_file):
+                clips.append(output_file)
+            else:
+                st.warning(f"O clipe {i + 1} está corrompido e foi ignorado.")
+
+            progress_bar.progress(int((i + 1) / num_clips * 100))
+
+        return clips
     except Exception as e:
-        st.error(f"Erro ao transcrever áudio com Google SpeechRecognition: {e}")
-        return "Transcrição indisponível."
+        st.error(f"Erro ao gerar os cortes: {e}")
+        return None
 
 def main():
     st.title("Gerador de Cortes Virais para YouTube e Twitch")
@@ -113,6 +136,7 @@ def main():
 
     video_url = st.text_input("Link do vídeo (YouTube ou Twitch):", "")
     clip_length = st.selectbox("Duração dos cortes (em segundos):", [30, 40, 60, 80])
+    aspect_ratio = st.selectbox("Proporção dos cortes:", ["16:9", "9:16"])
 
     if st.button("Gerar Cortes"):
         if not video_url:
@@ -128,7 +152,24 @@ def main():
                 return
 
             st.success("Vídeo baixado com sucesso!")
-            st.write(f"Arquivo salvo em: {video_path}")
+            with st.spinner("Gerando cortes..."):
+                clips = generate_clips(video_path, clip_length, aspect_ratio)
+                if clips:
+                    st.session_state["clips"] = clips
+                    st.success("Cortes gerados com sucesso!")
+                else:
+                    st.error("Erro ao gerar os cortes.")
+
+    if "clips" in st.session_state and st.session_state["clips"]:
+        st.write("Baixe os cortes abaixo:")
+        for i, clip in enumerate(st.session_state["clips"], start=1):
+            with open(clip, "rb") as f:
+                st.download_button(
+                    label=f"Baixar Corte {i}",
+                    data=f,
+                    file_name=os.path.basename(clip),
+                    mime="video/mp4"
+                )
 
 if __name__ == "__main__":
     main()
