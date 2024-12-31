@@ -8,10 +8,8 @@ from PIL import Image
 import speech_recognition as sr
 import random
 
+
 def download_video(youtube_url, output_path="downloads"):
-    """
-    Faz o download de um vídeo do YouTube usando yt-dlp e retorna o caminho do arquivo baixado.
-    """
     try:
         import yt_dlp
 
@@ -30,16 +28,13 @@ def download_video(youtube_url, output_path="downloads"):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(youtube_url, download=True)
             video_path = ydl.prepare_filename(info)
-            description = info.get("description", "Descrição não disponível.")
-            return video_path, description
+            return video_path
     except Exception as e:
         st.error(f"Erro ao baixar o vídeo: {e}")
-        return None, None
+        return None
+
 
 def get_video_duration(video_path):
-    """
-    Usa ffprobe para obter a duração total do vídeo.
-    """
     try:
         result = subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "json", video_path],
@@ -50,10 +45,8 @@ def get_video_duration(video_path):
     except Exception as e:
         raise RuntimeError(f"Erro ao obter a duração do vídeo: {e}")
 
+
 def is_video_valid(video_path):
-    """
-    Verifica se o vídeo é válido e pode ser lido usando FFmpeg.
-    """
     try:
         result = subprocess.run(
             ["ffmpeg", "-v", "error", "-i", video_path, "-f", "null", "-"],
@@ -63,26 +56,20 @@ def is_video_valid(video_path):
     except Exception:
         return False
 
+
 def summarize_description(description, max_words=5):
-    """
-    Resume uma descrição pegando as primeiras palavras relevantes.
-    """
     words = description.split()
     return " ".join(words[:max_words]).capitalize()
 
+
 def generate_hashtags(description, max_tags=5):
-    """
-    Gera hashtags aleatórias com palavras maiores que 10 letras.
-    """
     words = [word for word in description.split() if len(word) > 10]
     random.shuffle(words)
     hashtags = ["#" + word.lower() for word in words[:max_tags]]
     return " ".join(hashtags)
 
+
 def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_path="cuts"):
-    """
-    Gera cortes de vídeo a partir de um vídeo original, utilizando ffmpeg para processar.
-    """
     try:
         if not os.path.exists(output_path):
             os.makedirs(output_path)
@@ -106,9 +93,9 @@ def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_p
 
             ffmpeg_command.append(output_file)
 
-            subprocess.run(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            result = subprocess.run(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
-            if is_video_valid(output_file):
+            if result.returncode == 0 and is_video_valid(output_file):
                 clips.append((output_file, start_time))
             else:
                 st.warning(f"O clipe {i + 1} está corrompido e foi ignorado.")
@@ -120,28 +107,8 @@ def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_p
         st.error(f"Erro ao gerar os cortes: {e}")
         return None
 
-def extract_thumbnail(video_path, start_time, output_path="thumbnails"):
-    """
-    Extrai uma imagem de pré-visualização do clipe no início do vídeo.
-    """
-    if not os.path.exists(output_path):
-        os.makedirs(output_path)
-
-    thumbnail_path = os.path.join(output_path, f"thumbnail_{os.path.basename(video_path)}.jpg")
-    try:
-        with VideoFileClip(video_path) as video:
-            frame = video.get_frame(start_time)
-            image = Image.fromarray(frame)
-            image.save(thumbnail_path)
-        return thumbnail_path
-    except Exception as e:
-        st.error(f"Erro ao extrair miniatura: {e}")
-        return None
 
 def transcribe_audio_with_google(audio_path):
-    """
-    Transcreve o áudio de um arquivo usando SpeechRecognition com a API do Google.
-    """
     try:
         recognizer = sr.Recognizer()
         with sr.AudioFile(audio_path) as source:
@@ -155,6 +122,7 @@ def transcribe_audio_with_google(audio_path):
     except Exception as e:
         st.error(f"Erro ao transcrever áudio com Google SpeechRecognition: {e}")
         return "Transcrição indisponível."
+
 
 def main():
     st.title("Gerador de Cortes Virais para YouTube")
@@ -170,7 +138,7 @@ def main():
             return
 
         with st.spinner("Baixando o vídeo..."):
-            video_path, _ = download_video(youtube_url)
+            video_path = download_video(youtube_url)
 
         if video_path:
             if not is_video_valid(video_path):
@@ -187,10 +155,8 @@ def main():
                     st.error("Erro ao gerar os cortes.")
 
     if "clips" in st.session_state and st.session_state["clips"]:
-        st.write("Baixe os cortes abaixo com prévias e transcrições:")
+        st.write("Baixe os cortes abaixo com transcrições:")
         for i, (clip, start_time) in enumerate(st.session_state["clips"], start=1):
-            thumbnail = extract_thumbnail(clip, start_time)
-
             # Converter para WAV para usar no SpeechRecognition
             wav_file = f"{os.path.splitext(clip)[0]}.wav"
             subprocess.run(
@@ -199,22 +165,21 @@ def main():
             )
 
             transcription = transcribe_audio_with_google(wav_file)
+            short_title = summarize_description(transcription)
             hashtags = generate_hashtags(transcription)
 
-            col1, col2 = st.columns([1, 4])
-            with col1:
-                if thumbnail:
-                    st.image(thumbnail, caption=f"Corte {i}", use_container_width=True)
-            with col2:
-                st.subheader(f"Descrição: {transcription}")
-                st.write(f"Hashtags: {hashtags}")
-                with open(clip, "rb") as f:
-                    st.download_button(
-                        label=f"Baixar Corte {i}",
-                        data=f,
-                        file_name=f"clip_{i}.mp4",
-                        mime="video/mp4"
-                    )
+            st.subheader(f"Descrição: {transcription}")
+            st.write(f"Hashtags: {hashtags}")
+            clip_name = f"{short_title.replace(' ', '_')}_{i}.mp4"
+
+            with open(clip, "rb") as f:
+                st.download_button(
+                    label=f"Baixar {clip_name}",
+                    data=f,
+                    file_name=clip_name,
+                    mime="video/mp4"
+                )
+
 
 if __name__ == "__main__":
     main()
