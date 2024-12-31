@@ -103,7 +103,10 @@ def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_p
                 return None
 
             start_time = randint(0, int(max_start_time))
-            output_file = os.path.join(output_path, f"clip_{i + 1}.mp4")
+
+            # Criar um nome de arquivo baseado no tempo inicial e no vídeo
+            title = os.path.splitext(os.path.basename(video_path))[0]
+            output_file = os.path.join(output_path, f"{title}_part_{i + 1}.mp4")
 
             ffmpeg_command = [
                 "ffmpeg", "-y", "-i", video_path,
