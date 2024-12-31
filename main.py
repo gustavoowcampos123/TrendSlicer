@@ -5,6 +5,7 @@ from random import randint
 import json
 import speech_recognition as sr
 import re
+import openai
 
 
 def download_video(youtube_url, output_path="downloads"):
@@ -49,7 +50,6 @@ def generate_title_from_description(description):
     if not description:
         return "video_sem_titulo"
 
-    # Selecionar as primeiras palavras relevantes
     words = re.findall(r"\b\w+\b", description)
     title = "_".join(words[:5]).lower()  # Usar até 5 palavras
     return re.sub(r"[^a-zA-Z0-9_]+", "", title)  # Remover caracteres especiais
@@ -103,10 +103,8 @@ def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_p
                 return None
 
             start_time = randint(0, int(max_start_time))
-
-            # Criar um nome de arquivo baseado no tempo inicial e no vídeo
             title = os.path.splitext(os.path.basename(video_path))[0]
-            output_file = os.path.join(output_path, f"{title}_part_{i + 1}.mp4")
+            output_file = os.path.join(output_path, f"{title}_clip_{i+1}.mp4")
 
             ffmpeg_command = [
                 "ffmpeg", "-y", "-i", video_path,
@@ -119,17 +117,12 @@ def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_p
                 ffmpeg_command += ["-vf", "crop=in_h*9/16:in_h,scale=1080:1920"]
 
             ffmpeg_command.append(output_file)
-
-            result = subprocess.run(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-
-            if result.returncode != 0 or not os.path.exists(output_file) or os.path.getsize(output_file) == 0:
-                st.warning(f"Erro ao gerar o clipe {i + 1}. O comando FFmpeg falhou.")
-                continue
+            subprocess.run(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
             if is_video_valid(output_file):
                 clips.append((output_file, start_time))
             else:
-                st.warning(f"O clipe {i + 1} está corrompido e foi ignorado.")
+                st.warning(f"O clipe {i+1} está corrompido e foi ignorado.")
 
             progress_bar.progress(int((i + 1) / num_clips * 100))
 
@@ -137,25 +130,6 @@ def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_p
     except Exception as e:
         st.error(f"Erro ao gerar os cortes: {e}")
         return None
-
-
-def transcribe_audio_with_google(audio_path):
-    """
-    Transcreve o áudio de um arquivo usando SpeechRecognition com a API do Google.
-    """
-    try:
-        recognizer = sr.Recognizer()
-        with sr.AudioFile(audio_path) as source:
-            audio_data = recognizer.record(source)
-        return recognizer.recognize_google(audio_data, language="pt-BR")
-    except sr.UnknownValueError:
-        return "A transcrição não pôde ser realizada. Áudio inaudível ou não claro."
-    except sr.RequestError as e:
-        st.error(f"Erro na API do Google: {e}")
-        return "Erro ao usar a API do Google. Verifique sua conexão com a internet."
-    except Exception as e:
-        st.error(f"Erro ao transcrever áudio com Google SpeechRecognition: {e}")
-        return "Transcrição indisponível."
 
 
 def main():
@@ -191,28 +165,13 @@ def main():
     if "clips" in st.session_state and st.session_state["clips"]:
         st.write("Baixe os cortes abaixo:")
         for i, (clip, start_time) in enumerate(st.session_state["clips"], start=1):
-            wav_file = f"{os.path.splitext(clip)[0]}.wav"
-            subprocess.run(
-                ["ffmpeg", "-y", "-i", clip, "-ac", "1", "-ar", "16000", wav_file],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
-            )
-
-            transcription = transcribe_audio_with_google(wav_file)
-            description = f"Descrição baseada na transcrição: {transcription}"
-
-            col1, col2 = st.columns([1, 4])
-            with col1:
-                st.write(f"Corte {i}")
-            with col2:
-                st.write(description)
-                with open(clip, "rb") as f:
-                    st.download_button(
-                        label=f"Baixar Corte {i}",
-                        data=f,
-                        file_name=os.path.basename(clip),
-                        mime="video/mp4"
-                    )
+            with open(clip, "rb") as f:
+                st.download_button(
+                    label=f"Baixar Corte {i}",
+                    data=f,
+                    file_name=os.path.basename(clip),
+                    mime="video/mp4"
+                )
 
 
 if __name__ == "__main__":
