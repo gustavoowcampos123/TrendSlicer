@@ -1,6 +1,5 @@
 streamlit
 yt-dlp
 speechrecognition
-openai
-pytesseract
 pillow
+moviepy
