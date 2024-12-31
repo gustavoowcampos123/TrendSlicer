@@ -170,7 +170,7 @@ def main():
             return
 
         with st.spinner("Baixando o vídeo..."):
-            video_path, description = download_video(youtube_url)
+            video_path, _ = download_video(youtube_url)
 
         if video_path:
             if not is_video_valid(video_path):
@@ -182,24 +182,31 @@ def main():
                 clips = generate_clips(video_path, clip_length, aspect_ratio)
                 if clips:
                     st.session_state["clips"] = clips
-                    st.session_state["description"] = description
                     st.success("Cortes gerados com sucesso!")
                 else:
                     st.error("Erro ao gerar os cortes.")
 
     if "clips" in st.session_state and st.session_state["clips"]:
-        st.write("Baixe os cortes abaixo com prévias:")
+        st.write("Baixe os cortes abaixo com prévias e transcrições:")
         for i, (clip, start_time) in enumerate(st.session_state["clips"], start=1):
-            description = st.session_state.get("description", "Descrição não disponível.")
             thumbnail = extract_thumbnail(clip, start_time)
-            hashtags = generate_hashtags(description)
+
+            # Converter para WAV para usar no SpeechRecognition
+            wav_file = f"{os.path.splitext(clip)[0]}.wav"
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", clip, "-ac", "1", "-ar", "16000", wav_file],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+
+            transcription = transcribe_audio_with_google(wav_file)
+            hashtags = generate_hashtags(transcription)
 
             col1, col2 = st.columns([1, 4])
             with col1:
                 if thumbnail:
                     st.image(thumbnail, caption=f"Corte {i}", use_container_width=True)
             with col2:
-                st.subheader(f"Descrição: {description}")
+                st.subheader(f"Descrição: {transcription}")
                 st.write(f"Hashtags: {hashtags}")
                 with open(clip, "rb") as f:
                     st.download_button(
