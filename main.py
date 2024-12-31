@@ -30,10 +30,11 @@ def download_video(youtube_url, output_path="downloads"):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(youtube_url, download=True)
             video_path = ydl.prepare_filename(info)
-            return video_path
+            description = info.get("description", "Descrição não disponível.")
+            return video_path, description
     except Exception as e:
         st.error(f"Erro ao baixar o vídeo: {e}")
-        return None
+        return None, None
 
 def get_video_duration(video_path):
     """
@@ -119,6 +120,24 @@ def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_p
         st.error(f"Erro ao gerar os cortes: {e}")
         return None
 
+def extract_thumbnail(video_path, start_time, output_path="thumbnails"):
+    """
+    Extrai uma imagem de pré-visualização do clipe no início do vídeo.
+    """
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+
+    thumbnail_path = os.path.join(output_path, f"thumbnail_{os.path.basename(video_path)}.jpg")
+    try:
+        with VideoFileClip(video_path) as video:
+            frame = video.get_frame(start_time)
+            image = Image.fromarray(frame)
+            image.save(thumbnail_path)
+        return thumbnail_path
+    except Exception as e:
+        st.error(f"Erro ao extrair miniatura: {e}")
+        return None
+
 def transcribe_audio_with_google(audio_path):
     """
     Transcreve o áudio de um arquivo usando SpeechRecognition com a API do Google.
@@ -151,7 +170,7 @@ def main():
             return
 
         with st.spinner("Baixando o vídeo..."):
-            video_path = download_video(youtube_url)
+            video_path, description = download_video(youtube_url)
 
         if video_path:
             if not is_video_valid(video_path):
@@ -163,6 +182,7 @@ def main():
                 clips = generate_clips(video_path, clip_length, aspect_ratio)
                 if clips:
                     st.session_state["clips"] = clips
+                    st.session_state["description"] = description
                     st.success("Cortes gerados com sucesso!")
                 else:
                     st.error("Erro ao gerar os cortes.")
@@ -170,13 +190,24 @@ def main():
     if "clips" in st.session_state and st.session_state["clips"]:
         st.write("Baixe os cortes abaixo com prévias:")
         for i, (clip, start_time) in enumerate(st.session_state["clips"], start=1):
-            with open(clip, "rb") as f:
-                st.download_button(
-                    label=f"Baixar Corte {i}",
-                    data=f,
-                    file_name=f"clip_{i}.mp4",
-                    mime="video/mp4"
-                )
+            description = st.session_state.get("description", "Descrição não disponível.")
+            thumbnail = extract_thumbnail(clip, start_time)
+            hashtags = generate_hashtags(description)
+
+            col1, col2 = st.columns([1, 4])
+            with col1:
+                if thumbnail:
+                    st.image(thumbnail, caption=f"Corte {i}", use_container_width=True)
+            with col2:
+                st.subheader(f"Descrição: {description}")
+                st.write(f"Hashtags: {hashtags}")
+                with open(clip, "rb") as f:
+                    st.download_button(
+                        label=f"Baixar Corte {i}",
+                        data=f,
+                        file_name=f"clip_{i}.mp4",
+                        mime="video/mp4"
+                    )
 
 if __name__ == "__main__":
     main()
