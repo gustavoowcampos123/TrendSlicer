@@ -4,6 +4,3 @@ speechrecognition
 openai
 pytesseract
 pillow
-json
-subprocess
-re
