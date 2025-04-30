@@ -1,6 +1,8 @@
 streamlit
 yt-dlp
+moviepy
 speechrecognition
 pillow
-moviepy
-streamlink
+python-dotenv
+smtplib
+sqlite3
