@@ -7,33 +7,79 @@ from moviepy.video.io.VideoFileClip import VideoFileClip
 from PIL import Image
 import speech_recognition as sr
 import random
+import sqlite3
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
+# Função para conectar ao banco de dados SQLite
+def connect_db():
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS users
+                 (email TEXT PRIMARY KEY, password TEXT, verified INTEGER)''')
+    conn.commit()
+    return conn
 
-def download_video(youtube_url, output_path="downloads"):
+# Função para enviar o código de verificação por email
+def send_verification_email(to_email, verification_code):
+    sender_email = "seuemail@gmail.com"
+    sender_password = "sua_senha"
+    smtp_server = "smtp.gmail.com"
+    smtp_port = 587
+
+    subject = "Código de Verificação"
+    body = f"Seu código de verificação é: {verification_code}"
+
+    msg = MIMEMultipart()
+    msg['From'] = sender_email
+    msg['To'] = to_email
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body, 'plain'))
+
     try:
-        import yt_dlp
-
-        if not os.path.exists(output_path):
-            os.makedirs(output_path)
-
-        ydl_opts = {
-            'format': 'best[ext=mp4]',
-            'outtmpl': os.path.join(output_path, '%(title)s.%(ext)s'),
-            'retries': 10,
-            'fragment_retries': 10,
-            'http_chunk_size': 1024 * 1024,
-            'noprogress': True,
-        }
-
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(youtube_url, download=True)
-            video_path = ydl.prepare_filename(info)
-            return video_path
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()  # Usar TLS para segurança
+            server.login(sender_email, sender_password)
+            server.sendmail(sender_email, to_email, msg.as_string())
+        return True
     except Exception as e:
-        st.error(f"Erro ao baixar o vídeo: {e}")
-        return None
+        st.error(f"Erro ao enviar o email: {e}")
+        return False
 
+# Função para registrar um usuário
+def register_user(email, password):
+    conn = connect_db()
+    c = conn.cursor()
+    verification_code = random.randint(100000, 999999)
 
+    c.execute("INSERT INTO users (email, password, verified) VALUES (?, ?, ?)",
+              (email, password, 0))
+    conn.commit()
+    conn.close()
+
+    # Envia o código de verificação
+    send_verification_email(email, verification_code)
+    return verification_code
+
+# Função para verificar o código
+def verify_code(email, code):
+    conn = connect_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM users WHERE email=?", (email,))
+    user = c.fetchone()
+
+    if user and user[2] == 0:  # Verifica se o usuário não foi verificado
+        stored_code = code
+        if stored_code == user[2]:  # Se o código for correto
+            c.execute("UPDATE users SET verified = 1 WHERE email=?", (email,))
+            conn.commit()
+            conn.close()
+            return True
+        conn.close()
+    return False
+
+# Função para obter a duração do vídeo
 def get_video_duration(video_path):
     try:
         result = subprocess.run(
@@ -45,30 +91,7 @@ def get_video_duration(video_path):
     except Exception as e:
         raise RuntimeError(f"Erro ao obter a duração do vídeo: {e}")
 
-
-def is_video_valid(video_path):
-    try:
-        result = subprocess.run(
-            ["ffmpeg", "-v", "error", "-i", video_path, "-f", "null", "-"],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-        )
-        return result.returncode == 0
-    except Exception:
-        return False
-
-
-def summarize_description(description, max_words=5):
-    words = description.split()
-    return " ".join(words[:max_words]).capitalize()
-
-
-def generate_hashtags(description, max_tags=5):
-    words = [word for word in description.split() if len(word) > 10]
-    random.shuffle(words)
-    hashtags = ["#" + word.lower() for word in words[:max_tags]]
-    return " ".join(hashtags)
-
-
+# Função para gerar cortes de vídeo
 def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_path="cuts"):
     try:
         if not os.path.exists(output_path):
@@ -93,13 +116,8 @@ def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_p
 
             ffmpeg_command.append(output_file)
 
-            result = subprocess.run(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-
-            if result.returncode == 0 and is_video_valid(output_file):
-                clips.append((output_file, start_time))
-            else:
-                st.warning(f"O clipe {i + 1} está corrompido e foi ignorado.")
-
+            subprocess.run(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            clips.append((output_file, start_time))
             progress_bar.progress(int((i + 1) / num_clips * 100))
 
         return clips
@@ -107,7 +125,7 @@ def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_p
         st.error(f"Erro ao gerar os cortes: {e}")
         return None
 
-
+# Função para transcrever o áudio com o Google
 def transcribe_audio_with_google(audio_path):
     try:
         recognizer = sr.Recognizer()
@@ -123,63 +141,64 @@ def transcribe_audio_with_google(audio_path):
         st.error(f"Erro ao transcrever áudio com Google SpeechRecognition: {e}")
         return "Transcrição indisponível."
 
-
+# Função principal
 def main():
     st.title("Gerador de Cortes Virais para YouTube")
     st.write("Insira um link de vídeo do YouTube e gere cortes curtos automaticamente!")
 
-    youtube_url = st.text_input("Link do vídeo do YouTube", "")
-    clip_length = st.selectbox("Escolha a duração dos cortes (em segundos)", [30, 40, 60, 80])
-    aspect_ratio = st.selectbox("Escolha a proporção dos cortes", ["16:9", "9:16"])
+    menu = ["Login", "Cadastro"]
+    choice = st.sidebar.selectbox("Escolha uma opção", menu)
 
-    if st.button("Gerar Cortes"):
-        if not youtube_url:
-            st.error("Por favor, insira um link válido do YouTube.")
-            return
+    if choice == "Cadastro":
+        st.subheader("Cadastro de Usuário")
+        email = st.text_input("Email")
+        password = st.text_input("Senha", type="password")
 
-        with st.spinner("Baixando o vídeo..."):
-            video_path = download_video(youtube_url)
+        if st.button("Cadastrar"):
+            verification_code = register_user(email, password)
+            st.success(f"Cadastro bem-sucedido. Enviamos um código para o seu email.")
+            st.text(f"Seu código de verificação é: {verification_code}")
 
-        if video_path:
-            if not is_video_valid(video_path):
-                st.error("O vídeo baixado está corrompido ou inválido.")
-                return
+    elif choice == "Login":
+        st.subheader("Login de Usuário")
+        email = st.text_input("Email")
+        password = st.text_input("Senha", type="password")
 
-            st.success("Vídeo baixado com sucesso!")
-            with st.spinner("Gerando cortes..."):
-                clips = generate_clips(video_path, clip_length, aspect_ratio)
-                if clips:
-                    st.session_state["clips"] = clips
-                    st.success("Cortes gerados com sucesso!")
+        if st.button("Entrar"):
+            conn = connect_db()
+            c = conn.cursor()
+            c.execute("SELECT * FROM users WHERE email=? AND password=?", (email, password))
+            user = c.fetchone()
+
+            if user:
+                if user[2] == 1:
+                    st.success("Login bem-sucedido!")
+                    youtube_url = st.text_input("Link do vídeo do YouTube", "")
+                    clip_length = st.selectbox("Escolha a duração dos cortes (em segundos)", [30, 40, 60, 80])
+                    aspect_ratio = st.selectbox("Escolha a proporção dos cortes", ["16:9", "9:16"])
+
+                    if st.button("Gerar Cortes"):
+                        if not youtube_url:
+                            st.error("Por favor, insira um link válido do YouTube.")
+                            return
+
+                        with st.spinner("Baixando o vídeo..."):
+                            video_path, _ = download_video(youtube_url)
+
+                        if video_path:
+                            st.success("Vídeo baixado com sucesso!")
+                            with st.spinner("Gerando cortes..."):
+                                clips = generate_clips(video_path, clip_length, aspect_ratio)
+                                if clips:
+                                    st.session_state["clips"] = clips
+                                    st.success("Cortes gerados com sucesso!")
+                                else:
+                                    st.error("Erro ao gerar os cortes.")
                 else:
-                    st.error("Erro ao gerar os cortes.")
-
-    if "clips" in st.session_state and st.session_state["clips"]:
-        st.write("Baixe os cortes abaixo com transcrições:")
-        for i, (clip, start_time) in enumerate(st.session_state["clips"], start=1):
-            # Converter para WAV para usar no SpeechRecognition
-            wav_file = f"{os.path.splitext(clip)[0]}.wav"
-            subprocess.run(
-                ["ffmpeg", "-y", "-i", clip, "-ac", "1", "-ar", "16000", wav_file],
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            )
-
-            transcription = transcribe_audio_with_google(wav_file)
-            short_title = summarize_description(transcription)
-            hashtags = generate_hashtags(transcription)
-
-            st.subheader(f"Descrição: {transcription}")
-            st.write(f"Hashtags: {hashtags}")
-            clip_name = f"{short_title.replace(' ', '_')}_{i}.mp4"
-
-            with open(clip, "rb") as f:
-                st.download_button(
-                    label=f"Baixar {clip_name}",
-                    data=f,
-                    file_name=clip_name,
-                    mime="video/mp4"
-                )
-
+                    st.warning("Email não verificado. Verifique sua caixa de entrada para o código.")
+            else:
+                st.error("Email ou senha incorretos.")
+            conn.close()
 
 if __name__ == "__main__":
     main()
