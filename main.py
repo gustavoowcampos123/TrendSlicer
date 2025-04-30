@@ -116,8 +116,13 @@ def generate_clips(video_path, clip_length, aspect_ratio, num_clips=10, output_p
 
             ffmpeg_command.append(output_file)
 
-            subprocess.run(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            clips.append((output_file, start_time))
+            result = subprocess.run(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+            if result.returncode == 0 and is_video_valid(output_file):
+                clips.append((output_file, start_time))
+            else:
+                st.warning(f"O clipe {i + 1} está corrompido e foi ignorado.")
+
             progress_bar.progress(int((i + 1) / num_clips * 100))
 
         return clips
